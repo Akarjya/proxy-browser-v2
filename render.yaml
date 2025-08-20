@@ -3,7 +3,7 @@ services:
     name: proxy-browser-v2
     runtime: python
     plan: free
-    buildCommand: pip install fastapi uvicorn
+    buildCommand: pip install -r requirements-simple.txt
     startCommand: python main.py
     envVars:
       - key: PYTHONUNBUFFERED
