@@ -146,10 +146,46 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
         configurable: true
     }});
     
-    // Override fetch for analytics
+    // Override fetch for IP detection and analytics
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {{}}) {{
         const urlStr = url.toString();
+        
+        // Block ALL IP detection APIs and return fake US data
+        if (urlStr.includes('ipapi') || urlStr.includes('ipify') || urlStr.includes('ipinfo') || 
+            urlStr.includes('ip-api') || urlStr.includes('whatismyip') || urlStr.includes('myip') ||
+            urlStr.includes('ipgeolocation') || urlStr.includes('geoip') || urlStr.includes('ip2location') ||
+            urlStr.includes('maxmind') || urlStr.includes('iplocation') || urlStr.includes('getip') ||
+            urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip')) {{
+            console.log('🇺🇸 CROXYPROXY: Blocking IP detection API:', urlStr);
+            return Promise.resolve(new Response(JSON.stringify({{
+                ip: "172.56.47.191",
+                country: "United States",
+                country_code: "US",
+                country_name: "United States", 
+                region: "NY",
+                region_name: "New York",
+                region_code: "NY",
+                city: "New York",
+                zip: "10001",
+                postal: "10001",
+                lat: 40.7128,
+                lon: -74.0060,
+                latitude: 40.7128,
+                longitude: -74.0060,
+                timezone: "America/New_York",
+                utc_offset: "-05:00",
+                country_calling_code: "+1",
+                currency: "USD",
+                languages: "en-US,en",
+                isp: "Digital Ocean",
+                org: "Digital Ocean",
+                as: "AS14061 DigitalOcean, LLC",
+                query: "172.56.47.191"
+            }}), {{
+                headers: {{ 'Content-Type': 'application/json' }}
+            }}));
+        }}
         
         // Add US headers to all analytics requests
         if (urlStr.includes('google') || urlStr.includes('analytics') || urlStr.includes('adsense')) {{
@@ -157,12 +193,54 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
             options.headers = {{
                 ...options.headers,
                 'CF-IPCountry': 'US',
-                'X-Forwarded-For': '8.8.8.8',
+                'X-Forwarded-For': '172.56.47.191',
                 'Accept-Language': 'en-US,en;q=0.9'
             }};
         }}
         
         return originalFetch.call(this, url, options);
+    }};
+    
+    // Override XMLHttpRequest for IP detection
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {{
+        this._url = url;
+        return originalXHROpen.call(this, method, url, ...args);
+    }};
+    
+    XMLHttpRequest.prototype.send = function(data) {{
+        if (this._url && (this._url.includes('ipapi') || this._url.includes('ipify') || 
+            this._url.includes('ipinfo') || this._url.includes('whatismyip') || 
+            this._url.includes('geoip') || this._url.includes('iplocation'))) {{
+            console.log('🇺🇸 CROXYPROXY: Blocking XHR IP detection:', this._url);
+            
+            // Simulate successful response with fake data
+            setTimeout(() => {{
+                if (this.onreadystatechange) {{
+                    Object.defineProperty(this, 'readyState', {{ value: 4, writable: false }});
+                    Object.defineProperty(this, 'status', {{ value: 200, writable: false }});
+                    Object.defineProperty(this, 'responseText', {{ 
+                        value: JSON.stringify({{
+                            ip: "172.56.47.191",
+                            country: "United States",
+                            country_code: "US",
+                            city: "New York",
+                            region: "NY",
+                            lat: 40.7128,
+                            lon: -74.0060,
+                            timezone: "America/New_York"
+                        }}),
+                        writable: false 
+                    }});
+                    this.onreadystatechange();
+                }}
+            }}, 100);
+            return;
+        }}
+        
+        return originalXHRSend.call(this, data);
     }};
     
     // Text replacement
@@ -215,6 +293,21 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
                 characterData: true
             }});
     }}
+    
+    // Override common global variables used for IP detection
+    window.userIP = "172.56.47.191";
+    window.userCountry = "United States";
+    window.userCity = "New York";
+    window.userRegion = "NY";
+    window.userTimezone = "America/New_York";
+    window.userLatitude = 40.7128;
+    window.userLongitude = -74.0060;
+    
+    // Override any existing IP detection functions
+    if (window.getIP) window.getIP = () => "172.56.47.191";
+    if (window.getUserIP) window.getUserIP = () => "172.56.47.191";
+    if (window.getLocation) window.getLocation = () => "New York, United States";
+    if (window.getCountry) window.getCountry = () => "United States";
     
     console.log('🇺🇸 CROXYPROXY: Location spoofing initialized');
     </script>
