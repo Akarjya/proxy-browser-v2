@@ -68,9 +68,12 @@ async def lifespan(app: FastAPI):
     # Start browser pool (disabled for Railway deployment)
     # await browser_pool.initialize()
     
-    # Start background tasks
-    asyncio.create_task(ws_manager.heartbeat_sender())
-    asyncio.create_task(session_manager.cleanup_expired_sessions())
+    # Start background tasks (non-blocking)
+    try:
+        asyncio.create_task(ws_manager.heartbeat_sender())
+        asyncio.create_task(session_manager.cleanup_expired_sessions())
+    except Exception as e:
+        logger.warning(f"Background task startup warning: {e}")
     
     logger.info("Application startup complete")
     
@@ -341,6 +344,16 @@ def create_app() -> FastAPI:
         elif event_type == "facebook_pixel":
             # Handle Facebook Pixel events
             logger.debug(f"FB Pixel event from {session_id}: {data}")
+    
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint for Railway"""
+        return {"status": "healthy", "service": "proxy-browser-v2", "timestamp": "2025-08-20"}
+    
+    @app.get("/")
+    async def root():
+        """Root endpoint - redirect to health check"""
+        return {"message": "Proxy Browser V2 is running", "health": "/health"}
     
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
