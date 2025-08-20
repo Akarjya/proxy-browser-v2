@@ -40,12 +40,15 @@ def get_spoofed_headers(original_request: Request, target_url: str):
     headers.update({
         "Accept-Language": "en-US,en;q=0.9",
         "X-Forwarded-For": "172.56.47.191",
-        "CF-IPCountry": "US",
+        "CF-IPCountry": "US", 
+        "CF-Region": "NY",
+        "CF-City": "New York",
         "X-Real-IP": "172.56.47.191",
         "X-Forwarded-Proto": "https",
         "X-Appengine-Country": "US",
         "X-Appengine-Region": "ny", 
         "X-Appengine-City": "newyork",
+        "X-Appengine-User-IP": "172.56.47.191",
         "X-Client-IP": "172.56.47.191",
         "X-Cluster-Client-IP": "172.56.47.191",
         "X-Original-Forwarded-For": "172.56.47.191",
@@ -56,6 +59,10 @@ def get_spoofed_headers(original_request: Request, target_url: str):
         "HTTP_X_FORWARDED_FOR": "172.56.47.191",
         "HTTP_CLIENT_IP": "172.56.47.191",
         "HTTP_X_REAL_IP": "172.56.47.191",
+        "Forwarded": "for=172.56.47.191;proto=https;host=ybsq.xyz",
+        "X-Forwarded-Host": "ybsq.xyz",
+        "X-Original-Host": "ybsq.xyz",
+        "Host": urlparse(target_url).netloc,
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache"
@@ -309,6 +316,48 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
     if (window.getLocation) window.getLocation = () => "New York, United States";
     if (window.getCountry) window.getCountry = () => "United States";
     
+    // Override Google Analytics gtag function
+    if (window.gtag) {{
+        const originalGtag = window.gtag;
+        window.gtag = function(command, target, config) {{
+            if (config && typeof config === 'object') {{
+                // Force US location data in GA4 config
+                config.country = 'US';
+                config.region = 'NY';
+                config.city = 'New York';
+                config.custom_map = {{
+                    ...config.custom_map,
+                    country: 'US',
+                    region: 'NY',
+                    city: 'New York'
+                }};
+                console.log('🇺🇸 CROXYPROXY: Modified GA4 config with US location');
+            }}
+            return originalGtag.call(this, command, target, config);
+        }};
+    }}
+    
+    // Override gtag before it loads
+    window.gtag = window.gtag || function() {{
+        (window.gtag.q = window.gtag.q || []).push(arguments);
+    }};
+    
+    // Intercept gtag calls and add US data
+    const originalGtagQ = window.gtag.q || [];
+    window.gtag.q = new Proxy(originalGtagQ, {{
+        set: function(target, property, value) {{
+            if (Array.isArray(value) && value[0] === 'config') {{
+                console.log('🇺🇸 CROXYPROXY: Intercepting GA4 config');
+                value[2] = value[2] || {{}};
+                value[2].country = 'US';
+                value[2].region = 'NY';
+                value[2].city = 'New York';
+            }}
+            target[property] = value;
+            return true;
+        }}
+    }});
+    
     console.log('🇺🇸 CROXYPROXY: Location spoofing initialized');
     </script>
     """
@@ -488,6 +537,48 @@ async def proxy_page(path: str, request: Request):
                     html_content = re.sub(r'\bBhubaneswar\b', 'New York', html_content)
                     html_content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', html_content)
                     html_content = re.sub(r'\ben-GB\b', 'en-US', html_content)
+                    
+                    # Inject GA4 location override before any GA4 scripts
+                    ga4_override = '''
+                    <script>
+                    // GA4 Location Override - Must run before GA4 loads
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){dataLayer.push(arguments);}
+                    
+                    // Override gtag to force US location
+                    const originalGtag = window.gtag || gtag;
+                    window.gtag = function(command, target, config) {
+                        if (command === 'config' && config) {
+                            config.country = 'US';
+                            config.region = 'NY'; 
+                            config.city = 'New York';
+                            config.custom_map = config.custom_map || {};
+                            config.custom_map.country = 'US';
+                            config.custom_map.region = 'NY';
+                            config.custom_map.city = 'New York';
+                            console.log('🇺🇸 GA4: Forced US location in config');
+                        }
+                        return originalGtag.call(this, command, target, config);
+                    };
+                    
+                    // Set global location data for GA4
+                    gtag('config', 'G-BX28RFEZ30', {
+                        country: 'US',
+                        region: 'NY',
+                        city: 'New York',
+                        custom_map: {
+                            country: 'US',
+                            region: 'NY',
+                            city: 'New York'
+                        }
+                    });
+                    </script>
+                    '''
+                    
+                    # Inject GA4 override before any Google Analytics scripts
+                    if 'googletagmanager.com' in html_content or 'google-analytics.com' in html_content:
+                        html_content = html_content.replace('<head>', f'<head>{ga4_override}')
+                    
                     print("✅ Server-side IP replacement completed")
                     
                     # Rewrite content like CroxyProxy
