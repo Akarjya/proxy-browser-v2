@@ -39,13 +39,23 @@ def get_spoofed_headers(original_request: Request, target_url: str):
     # Override location-related headers with US data
     headers.update({
         "Accept-Language": "en-US,en;q=0.9",
-        "X-Forwarded-For": "8.8.8.8",
+        "X-Forwarded-For": "172.56.47.191",
         "CF-IPCountry": "US",
-        "X-Real-IP": "8.8.8.8",
+        "X-Real-IP": "172.56.47.191",
         "X-Forwarded-Proto": "https",
         "X-Appengine-Country": "US",
-        "X-Appengine-Region": "ny",
+        "X-Appengine-Region": "ny", 
         "X-Appengine-City": "newyork",
+        "X-Client-IP": "172.56.47.191",
+        "X-Cluster-Client-IP": "172.56.47.191",
+        "X-Original-Forwarded-For": "172.56.47.191",
+        "True-Client-IP": "172.56.47.191",
+        "X-Remote-IP": "172.56.47.191",
+        "X-Remote-Addr": "172.56.47.191",
+        "Remote-Addr": "172.56.47.191",
+        "HTTP_X_FORWARDED_FOR": "172.56.47.191",
+        "HTTP_CLIENT_IP": "172.56.47.191",
+        "HTTP_X_REAL_IP": "172.56.47.191",
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache"
@@ -375,6 +385,17 @@ async def proxy_page(path: str, request: Request):
                         </body>
                         </html>
                         """)
+                    
+                    # Server-side IP replacement (aggressive)
+                    print("🔧 Performing server-side IP replacement...")
+                    # Replace various IP patterns
+                    html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', '172.56.47.191', html_content)
+                    html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', '172.56.47.191', html_content)  # IPv6
+                    html_content = re.sub(r'\bIndia\b', 'United States', html_content)
+                    html_content = re.sub(r'\bBhubaneswar\b', 'New York', html_content)
+                    html_content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', html_content)
+                    html_content = re.sub(r'\ben-GB\b', 'en-US', html_content)
+                    print("✅ Server-side IP replacement completed")
                     
                     # Rewrite content like CroxyProxy
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
