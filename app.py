@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 import httpx
 import json
 import re
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 app = FastAPI(title="Proxy Browser V2")
 
@@ -49,9 +49,9 @@ async def root():
                 try {
                     // Try multiple sites
                     const sites = [
-                        '/proxy/httpbin.org/ip',
-                        '/proxy/example.com',
-                        '/proxy/ybsq.xyz'
+                        '/proxy/https://httpbin.org/ip',
+                        '/proxy/https://example.com',
+                        '/proxy/https://ybsq.xyz'
                     ];
                     
                     for (const site of sites) {
@@ -103,12 +103,32 @@ async def test_proxy():
 async def proxy_page(path: str):
     print(f"Received proxy request for path: {path}")
     try:
+        # Decode URL if needed
+        path = unquote(path)
+        
         # Construct full URL
         if not path.startswith('http'):
             path = 'https://' + path
+        elif path.startswith('http://'):
+            path = path.replace('http://', 'https://', 1)
         
         print(f"Proxying request to: {path}")
         print(f"Proxy config: {PROXY_CONFIG}")
+        
+        # Validate URL
+        if not path.startswith(('http://', 'https://')):
+            return HTMLResponse(f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Invalid URL</title></head>
+            <body>
+                <h1>Invalid URL</h1>
+                <p>URL must start with http:// or https://</p>
+                <p>Received: {path}</p>
+                <button onclick="window.location.reload()">Try Again</button>
+            </body>
+            </html>
+            """)
         
         # Create proxy client
         proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
