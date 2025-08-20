@@ -376,6 +376,25 @@ async def proxy_page(path: str):
                         }}));
                     }}
                     
+                    // Allow Google Analytics through with US headers
+                    if (urlStr.includes('google-analytics.com') || urlStr.includes('googletagmanager.com') ||
+                        urlStr.includes('analytics.google.com') || urlStr.includes('/gtag/') || 
+                        urlStr.includes('/collect') || urlStr.includes('measurement_id')) {{
+                        console.log('🇺🇸 PROXY: Allowing GA4 with US headers:', urlStr);
+                        const newOptions = {{ ...options }};
+                        newOptions.headers = {{
+                            ...newOptions.headers,
+                            'X-Forwarded-For': '172.56.47.191',
+                            'CF-IPCountry': 'US',
+                            'X-Real-IP': '172.56.47.191',
+                            'X-Forwarded-Proto': 'https',
+                            'X-Appengine-Country': 'US',
+                            'X-Appengine-Region': 'ny',
+                            'X-Appengine-City': 'newyork'
+                        }};
+                        return originalFetch.call(this, url, newOptions);
+                    }}
+                    
                     // Intercept WordPress tracking
                     if (urlStr.includes('wp-json') || urlStr.includes('wp-admin')) {{
                         console.log('🇺🇸 PROXY: Intercepting WordPress API:', urlStr);
