@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: proxy-browser-v2-python
+    name: proxy-browser-v2-croxyproxy
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python app_croxyproxy.py
+    startCommand: python app.py
     envVars:
       - key: PYTHONUNBUFFERED
         value: 1

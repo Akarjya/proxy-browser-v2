@@ -1,16 +1,18 @@
 import os
 import sys
-from pathlib import Path
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, Response
-import httpx
-import json
 import re
-from urllib.parse import quote, unquote
+import json
+import base64
+from pathlib import Path
+from urllib.parse import quote, unquote, urljoin, urlparse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
+import httpx
+import asyncio
 
-app = FastAPI(title="Proxy Browser V2")
+app = FastAPI(title="Proxy Browser V2 - CroxyProxy Style")
 
-# Simple proxy configuration
+# Proxy configuration
 PROXY_CONFIG = {
     "server": os.environ.get("PROXY_SERVER", "pg.proxi.es:20000"),
     "username": os.environ.get("PROXY_USERNAME", "KMwYgm4pR4upF6yX"),
@@ -18,10 +20,210 @@ PROXY_CONFIG = {
     "country": os.environ.get("PROXY_COUNTRY", "USA"),
     "timezone": os.environ.get("SPOOF_TIMEZONE", "America/New_York"),
     "language": os.environ.get("SPOOF_LANGUAGE", "en-US"),
-    "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://httpbin.org/ip")
+    "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://ybsq.xyz/")
 }
 
-# Simple app
+def get_proxy_url():
+    return f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
+
+def get_spoofed_headers(original_request: Request, target_url: str):
+    """Get headers with US location spoofing while preserving original User-Agent"""
+    headers = {}
+    
+    # Preserve original headers but modify location-related ones
+    for name, value in original_request.headers.items():
+        if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding']:
+            headers[name] = value
+    
+    # Override location-related headers with US data
+    headers.update({
+        "Accept-Language": "en-US,en;q=0.9",
+        "X-Forwarded-For": "8.8.8.8",
+        "CF-IPCountry": "US",
+        "X-Real-IP": "8.8.8.8",
+        "X-Forwarded-Proto": "https",
+        "X-Appengine-Country": "US",
+        "X-Appengine-Region": "ny",
+        "X-Appengine-City": "newyork",
+        "Accept-Encoding": "gzip, deflate",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+    })
+    
+    return headers
+
+def rewrite_html_content(content: str, base_url: str, proxy_base: str):
+    """Rewrite HTML content like CroxyProxy"""
+    
+    # Parse base URL
+    parsed_base = urlparse(base_url)
+    domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
+    
+    # Rewrite absolute URLs
+    content = re.sub(
+        r'(href|src|action)=(["\'])https?://([^"\']+)\2',
+        rf'\1=\2{proxy_base}/\3\2',
+        content
+    )
+    
+    # Rewrite protocol-relative URLs
+    content = re.sub(
+        r'(href|src|action)=(["\'])//([^"\']+)\2',
+        rf'\1=\2{proxy_base}/https://\3\2',
+        content
+    )
+    
+    # Rewrite relative URLs
+    content = re.sub(
+        r'(href|src|action)=(["\'])(?!http|//|#|mailto:|tel:|javascript:)([^"\']+)\2',
+        rf'\1=\2{proxy_base}/{domain}/\3\2',
+        content
+    )
+    
+    # Add comprehensive spoofing script
+    spoof_script = f"""
+    <script>
+    // CroxyProxy-style spoofing
+    console.log('🇺🇸 CROXYPROXY: Initializing location spoofing...');
+    
+    // Override geolocation
+    if (navigator.geolocation) {{
+        const fakePosition = {{
+            coords: {{
+                latitude: 40.7128,
+                longitude: -74.0060,
+                accuracy: 10,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                speed: null
+            }},
+            timestamp: Date.now()
+        }};
+        
+        navigator.geolocation.getCurrentPosition = function(success, error, options) {{
+            console.log('🇺🇸 CROXYPROXY: Spoofing getCurrentPosition');
+            if (success) setTimeout(() => success(fakePosition), 100);
+        }};
+        
+        navigator.geolocation.watchPosition = function(success, error, options) {{
+            console.log('🇺🇸 CROXYPROXY: Spoofing watchPosition');
+            if (success) setTimeout(() => success(fakePosition), 100);
+            return 1;
+        }};
+    }}
+    
+    // Override timezone
+    Date.prototype.getTimezoneOffset = function() {{
+        return 300; // EST
+    }};
+    
+    // Override Intl
+    const originalDateTimeFormat = Intl.DateTimeFormat;
+    Intl.DateTimeFormat = function(locale, options) {{
+        return new originalDateTimeFormat('en-US', {{...options, timeZone: 'America/New_York'}});
+    }};
+    
+    // Override navigator properties
+    Object.defineProperty(navigator, 'language', {{
+        get: () => 'en-US',
+        configurable: true
+    }});
+    
+    Object.defineProperty(navigator, 'languages', {{
+        get: () => ['en-US', 'en'],
+        configurable: true
+    }});
+    
+    // Override fetch for analytics
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options = {{}}) {{
+        const urlStr = url.toString();
+        
+        // Add US headers to all analytics requests
+        if (urlStr.includes('google') || urlStr.includes('analytics') || urlStr.includes('adsense')) {{
+            console.log('🇺🇸 CROXYPROXY: Adding US headers to analytics');
+            options.headers = {{
+                ...options.headers,
+                'CF-IPCountry': 'US',
+                'X-Forwarded-For': '8.8.8.8',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }};
+        }}
+        
+        return originalFetch.call(this, url, options);
+    }};
+    
+    // Text replacement
+    function replaceLocationText() {{
+        const walker = document.createTreeWalker(
+            document.body || document.documentElement,
+            NodeFilter.SHOW_TEXT
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {{
+            if (node.textContent) {{
+                let text = node.textContent;
+                let changed = false;
+                
+                if (text.includes('India')) {{
+                    text = text.replace(/India/g, 'United States');
+                    changed = true;
+                }}
+                if (text.includes('Bhubaneswar')) {{
+                    text = text.replace(/Bhubaneswar/g, 'New York');
+                    changed = true;
+                }}
+                if (text.includes('Asia/Calcutta')) {{
+                    text = text.replace(/Asia\/Calcutta/g, 'America/New_York');
+                    changed = true;
+                }}
+                
+                if (changed) {{
+                    node.textContent = text;
+                    console.log('🇺🇸 CROXYPROXY: Replaced location text');
+                }}
+            }}
+        }}
+    }}
+    
+    // Run replacements
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', replaceLocationText);
+    }} else {{
+        replaceLocationText();
+    }}
+    
+    // Monitor for changes
+    if (window.MutationObserver) {{
+        new MutationObserver(() => setTimeout(replaceLocationText, 100))
+            .observe(document.body || document.documentElement, {{
+                childList: true,
+                subtree: true,
+                characterData: true
+            }});
+    }}
+    
+    console.log('🇺🇸 CROXYPROXY: Location spoofing initialized');
+    </script>
+    """
+    
+    # Inject script and meta tags
+    meta_viewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+    
+    if '<head>' in content:
+        content = content.replace('<head>', f'<head>{meta_viewport}{spoof_script}')
+    elif '<html>' in content:
+        content = content.replace('<html>', f'<html><head>{meta_viewport}{spoof_script}</head>')
+    else:
+        content = f'<html><head>{meta_viewport}{spoof_script}</head><body>{content}</body></html>'
+    
+    # Add status indicator
+    status_div = '<div style="position:fixed;top:10px;right:10px;background:#28a745;color:white;padding:8px 12px;border-radius:5px;z-index:999999;font-size:12px;font-family:Arial;">🇺🇸 US Proxy Active</div>'
+    content = content.replace('<body', f'<body>{status_div}')
+    
+    return content
 
 @app.get("/")
 async def root():
@@ -30,48 +232,50 @@ async def root():
     <html>
     <head>
         <title>Proxy Browser V2</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-            .btn { background: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; }
-            .loading { display: none; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
+                padding: 20px;
+            }
+            .container {
+                background: white;
+                padding: 40px;
+                border-radius: 15px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                text-align: center;
+                max-width: 500px;
+                width: 100%;
+            }
+            h1 { color: #333; margin-bottom: 10px; }
+            p { color: #666; margin-bottom: 30px; }
+            .btn {
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 25px;
+                font-size: 16px;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            .btn:hover { transform: translateY(-2px); }
         </style>
     </head>
     <body>
-        <h1>🌐 Proxy Browser V2</h1>
-        <p>Browse with US IP address and location</p>
-        <button class="btn" onclick="startBrowsing()">Start Browsing</button>
-        <div class="loading" id="loading">Loading...</div>
-        <div id="content"></div>
-        
-        <script>
-            async function startBrowsing() {
-                document.getElementById('loading').style.display = 'block';
-                try {
-                    // Try multiple sites
-                    const sites = [
-                        '/proxy/https://httpbin.org/ip',
-                        '/proxy/https://example.com',
-                        '/proxy/https://ybsq.xyz'
-                    ];
-                    
-                    for (const site of sites) {
-                        try {
-                            const response = await fetch(site);
-                            if (response.ok) {
-                                const html = await response.text();
-                                document.getElementById('content').innerHTML = html;
-                                break;
-                            }
-                        } catch (e) {
-                            console.log(`Failed to load ${site}:`, e);
-                        }
-                    }
-                } catch (error) {
-                    document.getElementById('content').innerHTML = 'Error: ' + error.message;
-                }
-                document.getElementById('loading').style.display = 'none';
-            }
-        </script>
+        <div class="container">
+            <h1>🌐 Proxy Browser V2</h1>
+            <p>Browse with US IP address and location</p>
+            <button class="btn" onclick="window.location.href='/proxy/https://ybsq.xyz/'">
+                Start Browsing
+            </button>
+        </div>
     </body>
     </html>
     """)
@@ -84,567 +288,153 @@ def ping():
 def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
 
-@app.get("/test-proxy")
-async def test_proxy():
-    try:
-        proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
-        
-        async with httpx.AsyncClient(
-            proxies={"http://": proxy_url, "https://": proxy_url},
-            timeout=10.0,
-            verify=False
-        ) as client:
-            response = await client.get("https://httpbin.org/ip")
-            return {"status": "success", "proxy_ip": response.json()}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 @app.get("/proxy/{path:path}")
 async def proxy_page(path: str, request: Request):
-    print(f"Received proxy request for path: {path}")
     try:
-        # Decode URL if needed
+        # Decode URL
         path = unquote(path)
         
-        # Construct full URL
-        if not path.startswith('http'):
-            path = 'https://' + path
-        elif path.startswith('http://'):
-            path = path.replace('http://', 'https://', 1)
-        
-        print(f"Proxying request to: {path}")
-        print(f"Proxy config: {PROXY_CONFIG}")
-        
-        # Validate URL
+        # Ensure proper URL format
         if not path.startswith(('http://', 'https://')):
-            return HTMLResponse(f"""
-            <!DOCTYPE html>
-            <html>
-            <head><title>Invalid URL</title></head>
-            <body>
-                <h1>Invalid URL</h1>
-                <p>URL must start with http:// or https://</p>
-                <p>Received: {path}</p>
-                <button onclick="window.location.reload()">Try Again</button>
-            </body>
-            </html>
-            """)
+            path = 'https://' + path
+        
+        print(f"🌐 PROXY: Fetching {path}")
+        
+        # Get spoofed headers
+        headers = get_spoofed_headers(request, path)
         
         # Create proxy client
-        proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
+        proxy_url = get_proxy_url()
         
         async with httpx.AsyncClient(
             proxies={"http://": proxy_url, "https://": proxy_url},
             timeout=30.0,
-            verify=False
+            verify=False,
+            follow_redirects=True
         ) as client:
-            # Get original User-Agent from request
-            original_ua = request.headers.get("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            
-            # Add spoofed headers
-            headers = {
-                "User-Agent": original_ua,
-                "Accept-Language": PROXY_CONFIG['language'],
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Cache-Control": "max-age=0",
-                "X-Forwarded-For": "8.8.8.8",
-                "CF-IPCountry": "US",
-                "X-Real-IP": "8.8.8.8",
-                "X-Forwarded-Proto": "https",
-                "X-Forwarded-Host": "ybsq.xyz"
-            }
-            
             response = await client.get(path, headers=headers)
-            print(f"Response status: {response.status_code}")
             
-            # Only log headers for main HTML pages, not resources
-            if 'text/html' in response.headers.get('content-type', ''):
-                print(f"Response headers: {dict(response.headers)}")
-            else:
-                print(f"Content-Type: {response.headers.get('content-type', 'unknown')}")
+            print(f"📊 Status: {response.status_code} | Content-Type: {response.headers.get('content-type', 'unknown')}")
             
-            # Check for unsupported content encoding
-            content_encoding = response.headers.get('content-encoding', '')
-            if 'br' in content_encoding:
-                print(f"Warning: Brotli compression detected - {content_encoding}")
-                # Try again with different headers to avoid Brotli
-                headers.update({
-                    "Accept-Encoding": "gzip, deflate",
-                    "Cache-Control": "no-cache",
-                    "Pragma": "no-cache"
-                })
-                response = await client.get(path, headers=headers)
-                print(f"Retry response status: {response.status_code}")
-                print(f"Retry response headers: {dict(response.headers)}")
+            content_type = response.headers.get('content-type', '').lower()
             
-            if response.status_code == 403:
-                return HTMLResponse(f"""
-                <!DOCTYPE html>
-                <html>
-                <head><title>403 Forbidden</title></head>
-                <body>
-                    <h1>403 - Forbidden</h1>
-                    <p>The target site is blocking proxy requests.</p>
-                    <p>Status: {response.status_code}</p>
-                    <p>Headers: {dict(response.headers)}</p>
-                    <button onclick="window.location.reload()">Try Again</button>
-                </body>
-                </html>
-                """)
+            # Handle different content types properly
+            if 'text/html' in content_type:
+                # HTML content - process and rewrite
+                try:
+                    html_content = response.text
+                    
+                    # Rewrite content like CroxyProxy
+                    proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
+                    processed_content = rewrite_html_content(html_content, path, proxy_base)
+                    
+                    return HTMLResponse(
+                        content=processed_content,
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
+                            "X-Frame-Options": "ALLOWALL",
+                            "Content-Security-Policy": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+                        }
+                    )
+                except Exception as e:
+                    print(f"❌ HTML processing error: {e}")
+                    return HTMLResponse(f"<h1>Error processing HTML</h1><p>{str(e)}</p>")
             
-            # Get content and check if it's readable
-            try:
-                content = response.text
-                # Quick check if content is garbled (contains lots of non-printable chars)
-                if len([c for c in content[:100] if ord(c) > 127]) > 50:
-                    raise UnicodeDecodeError("utf-8", b"", 0, 0, "Garbled content detected")
-            except (UnicodeDecodeError, Exception) as e:
-                print(f"Content decode error: {e}")
-                return HTMLResponse(f"""
-                <!DOCTYPE html>
-                <html>
-                <head><title>Content Encoding Error</title></head>
-                <body>
-                    <div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>
-                    <h1>Content Encoding Error</h1>
-                    <p>The website returned compressed content that couldn't be decoded.</p>
-                    <p><strong>URL:</strong> {path}</p>
-                    <p><strong>Status:</strong> {response.status_code}</p>
-                    <p><strong>Content-Encoding:</strong> {response.headers.get('content-encoding', 'none')}</p>
-                    <p>This site may be using Brotli compression which is not supported yet.</p>
-                    <button onclick="window.location.reload()">Try Again</button>
-                    <button onclick="window.location.href='/'">Go Back</button>
-                </body>
-                </html>
-                """)
+            elif 'text/css' in content_type:
+                # CSS content - rewrite URLs
+                css_content = response.text
+                proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
+                
+                # Rewrite CSS URLs
+                css_content = re.sub(
+                    r'url\(["\']?([^"\'\\)]+)["\']?\)',
+                    rf'url("{proxy_base}/\1")',
+                    css_content
+                )
+                
+                return Response(
+                    content=css_content,
+                    media_type="text/css",
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=3600"
+                    }
+                )
             
-            # Handle different content types
-            content_type = response.headers.get('content-type', '')
-            
-            # For CSS and JS files, return as-is with proper headers
-            if 'text/css' in content_type or 'application/javascript' in content_type or 'text/javascript' in content_type:
+            elif 'javascript' in content_type:
+                # JavaScript content - return as-is with CORS
                 return Response(
                     content=response.content,
                     media_type=content_type,
-                    headers={"Access-Control-Allow-Origin": "*"}
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=3600"
+                    }
                 )
             
-            # For images and other binary content
-            if 'image/' in content_type or 'application/octet-stream' in content_type:
+            elif 'application/json' in content_type:
+                # JSON content - format nicely
+                try:
+                    json_data = response.json()
+                    return HTMLResponse(f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>JSON Response</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; padding: 20px; }}
+                            .status {{ position: fixed; top: 10px; right: 10px; background: #28a745; color: white; padding: 8px 12px; border-radius: 5px; }}
+                            pre {{ background: #f8f9fa; padding: 20px; border-radius: 8px; overflow: auto; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="status">🇺🇸 US Proxy Active</div>
+                        <h1>Proxy Response</h1>
+                        <p><strong>URL:</strong> {path}</p>
+                        <p><strong>Status:</strong> {response.status_code}</p>
+                        <pre>{json.dumps(json_data, indent=2)}</pre>
+                        <button onclick="history.back()">← Back</button>
+                    </body>
+                    </html>
+                    """)
+                except:
+                    return Response(content=response.content, media_type=content_type)
+            
+            else:
+                # Binary content (images, etc.) - return as-is
                 return Response(
                     content=response.content,
                     media_type=content_type,
-                    headers={"Access-Control-Allow-Origin": "*"}
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=86400"
+                    }
                 )
-            
-            # Check if it's JSON response (like httpbin)
-            if content_type.startswith('application/json'):
-                # Format JSON nicely for display
-                json_content = json.loads(content)
-                formatted_content = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Proxy Response</title>
-                    <style>
-                        body {{ font-family: Arial, sans-serif; padding: 20px; }}
-                        .status {{ position: fixed; top: 10px; right: 10px; background: green; color: white; padding: 10px; border-radius: 5px; z-index: 9999; }}
-                        .json {{ background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0; }}
-                        pre {{ font-size: 16px; line-height: 1.5; }}
-                    </style>
-                </head>
-                <body>
-                    <div class="status">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>
-                    <h1>Proxy Response</h1>
-                    <p><strong>URL:</strong> {path}</p>
-                    <p><strong>Status:</strong> {response.status_code}</p>
-                    <div class="json">
-                        <h3>Response Data:</h3>
-                        <pre>{json.dumps(json_content, indent=2)}</pre>
-                    </div>
-                    <button onclick="window.location.reload()">Refresh</button>
-                </body>
-                </html>
-                """
-                return HTMLResponse(formatted_content)
-            else:
-                # Regular HTML content
-                # Enhanced URL rewriting for better resource loading
-                # Rewrite absolute URLs in href attributes
-                content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
                 
-                # Rewrite absolute URLs in src attributes  
-                content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
-                
-                # Rewrite CSS @import and url() references
-                content = re.sub(r'@import\s+["\']([^"\']+)["\']', r'@import "/proxy/\1"', content)
-                content = re.sub(r'url\(["\']?([^"\'\\)]+)["\']?\)', r'url("/proxy/\1")', content)
-                
-                # Rewrite JavaScript fetch/XMLHttpRequest URLs
-                content = re.sub(r'fetch\(["\']([^"\']+)["\']', r'fetch("/proxy/\1"', content)
-                content = re.sub(r'XMLHttpRequest.*open\(["\'][^"\']*["\'],\s*["\']([^"\']+)["\']', r'XMLHttpRequest.open("GET", "/proxy/\1"', content)
-                
-                # Server-side location text replacement
-                if any(term in content for term in ['India', 'Bhubaneswar', 'Asia/Calcutta', 'en-GB', 'Unknown']):
-                    print("🇺🇸 PROXY: Performing server-side location replacement...")
-                    content = re.sub(r'\bIndia\b', 'United States', content)
-                    content = re.sub(r'\bBhubaneswar\b', 'New York', content) 
-                    content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', content)
-                    content = re.sub(r'\ben-GB\b', 'en-US', content)
-                    content = re.sub(r'\bUnknown\b', 'New York, NY', content)
-                    print("🇺🇸 PROXY: Server-side location replacement completed")
-                
-                # Add comprehensive JavaScript injection for spoofing
-                spoof_script = f"""
-                <script>
-                console.log('🇺🇸 PROXY: Initializing US location spoofing...');
-                
-                // Override geolocation API
-                if (navigator.geolocation) {{
-                    const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition;
-                    const originalWatchPosition = navigator.geolocation.watchPosition;
-                    
-                    navigator.geolocation.getCurrentPosition = function(success, error, options) {{
-                        console.log('🇺🇸 PROXY: Spoofing geolocation.getCurrentPosition');
-                        const spoofedPosition = {{
-                            coords: {{
-                                latitude: 40.7128,
-                                longitude: -74.0060,
-                                accuracy: 10,
-                                altitude: null,
-                                altitudeAccuracy: null,
-                                heading: null,
-                                speed: null
-                            }},
-                            timestamp: Date.now()
-                        }};
-                        if (success) success(spoofedPosition);
-                    }};
-                    
-                    navigator.geolocation.watchPosition = function(success, error, options) {{
-                        console.log('🇺🇸 PROXY: Spoofing geolocation.watchPosition');
-                        return originalGetCurrentPosition.call(this, success, error, options);
-                    }};
-                }}
-                
-                // Override timezone
-                const originalDateTimeFormat = Intl.DateTimeFormat;
-                Intl.DateTimeFormat = function(...args) {{
-                    console.log('🇺🇸 PROXY: Spoofing Intl.DateTimeFormat');
-                    if (args.length === 0 || !args[0]) {{
-                        args[0] = 'en-US';
-                    }}
-                    const options = args[1] || {{}};
-                    options.timeZone = 'America/New_York';
-                    return new originalDateTimeFormat(args[0], options);
-                }};
-                
-                // Override Date timezone offset
-                const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-                Date.prototype.getTimezoneOffset = function() {{
-                    console.log('🇺🇸 PROXY: Spoofing timezone offset to EST/EDT');
-                    return 300; // EST offset (UTC-5)
-                }};
-                
-                // Override timezone string
-                const originalToString = Date.prototype.toString;
-                Date.prototype.toString = function() {{
-                    const date = originalToString.call(this);
-                    console.log('🇺🇸 PROXY: Spoofing Date.toString timezone');
-                    return date.replace(/GMT[+-]\\d{{4}}.*$/, 'GMT-0500 (Eastern Standard Time)');
-                }};
-                
-                // Override Intl.DateTimeFormat resolvedOptions
-                const originalResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
-                Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
-                    const options = originalResolvedOptions.call(this);
-                    console.log('🇺🇸 PROXY: Spoofing DateTimeFormat resolvedOptions');
-                    options.timeZone = 'America/New_York';
-                    options.locale = 'en-US';
-                    return options;
-                }};
-                
-                // Override fetch for IP detection APIs
-                const originalFetch = window.fetch;
-                window.fetch = function(url, options) {{
-                    const urlStr = url.toString();
-                    // Only log important intercepts, not every fetch
-                    if (urlStr.includes('wp-json') || urlStr.includes('ipapi') || urlStr.includes('analytics')) {{
-                        console.log('🇺🇸 PROXY: Intercepting fetch:', urlStr);
-                    }}
-                    
-                    // Block or redirect ONLY specific IP detection services (not all location APIs)
-                    if (urlStr.includes('ipapi.co/json') || urlStr.includes('api.ipify.org') || 
-                        urlStr.includes('ipinfo.io/json') || urlStr.includes('ip-api.com/json') ||
-                        urlStr.includes('whatismyipaddress.com') || urlStr.includes('myip.com')) {{
-                        console.log('🇺🇸 PROXY: Blocking IP/Location detection API:', urlStr);
-                        return Promise.resolve(new Response(JSON.stringify({{
-                            ip: "172.56.47.191",
-                            country: "United States",
-                            country_code: "US", 
-                            country_name: "United States",
-                            region: "NY",
-                            region_name: "New York",
-                            region_code: "NY",
-                            city: "New York",
-                            zip: "10001",
-                            postal: "10001",
-                            lat: 40.7128,
-                            lon: -74.0060,
-                            latitude: 40.7128,
-                            longitude: -74.0060,
-                            timezone: "America/New_York",
-                            utc_offset: "-05:00",
-                            country_calling_code: "+1",
-                            currency: "USD",
-                            languages: "en-US,en",
-                            isp: "Digital Ocean",
-                            org: "Digital Ocean", 
-                            as: "AS14061 DigitalOcean, LLC",
-                            asname: "DIGITALOCEAN-ASN",
-                            mobile: false,
-                            proxy: false,
-                            hosting: true
-                        }}), {{
-                            headers: {{ 'Content-Type': 'application/json' }}
-                        }}));
-                    }}
-                    
-                    // Allow Google Analytics and AdSense through with US headers
-                    if (urlStr.includes('google-analytics.com') || urlStr.includes('googletagmanager.com') ||
-                        urlStr.includes('analytics.google.com') || urlStr.includes('/gtag/') || 
-                        urlStr.includes('/collect') || urlStr.includes('measurement_id') ||
-                        urlStr.includes('googlesyndication.com') || urlStr.includes('doubleclick.net') ||
-                        urlStr.includes('adnxs.com') || urlStr.includes('adsystem.com')) {{
-                        console.log('🇺🇸 PROXY: Allowing Analytics/AdSense with US headers');
-                        const newOptions = {{ ...options }};
-                        newOptions.headers = {{
-                            ...newOptions.headers,
-                            'X-Forwarded-For': '172.56.47.191',
-                            'CF-IPCountry': 'US',
-                            'X-Real-IP': '172.56.47.191',
-                            'X-Forwarded-Proto': 'https',
-                            'X-Appengine-Country': 'US',
-                            'X-Appengine-Region': 'ny',
-                            'X-Appengine-City': 'newyork',
-                            'Accept-Language': 'en-US,en;q=0.9'
-                        }};
-                        return originalFetch.call(this, url, newOptions);
-                    }}
-                    
-                    // Intercept WordPress tracking
-                    if (urlStr.includes('wp-json') || urlStr.includes('wp-admin')) {{
-                        console.log('🇺🇸 PROXY: Intercepting WordPress API:', urlStr);
-                        // Add US headers to WordPress requests
-                        const newOptions = {{ ...options }};
-                        newOptions.headers = {{
-                            ...newOptions.headers,
-                            'X-Forwarded-For': '172.56.47.191',
-                            'CF-IPCountry': 'US',
-                            'X-Real-IP': '172.56.47.191'
-                        }};
-                        return originalFetch.call(this, url, newOptions);
-                    }}
-                    
-                    return originalFetch.call(this, url, options);
-                }};
-                
-                // Override XMLHttpRequest
-                const originalXHROpen = XMLHttpRequest.prototype.open;
-                const originalXHRSend = XMLHttpRequest.prototype.send;
-                
-                XMLHttpRequest.prototype.open = function(method, url, ...args) {{
-                    console.log('🇺🇸 PROXY: Intercepting XHR:', url);
-                    this._url = url;
-                    return originalXHROpen.call(this, method, url, ...args);
-                }};
-                
-                XMLHttpRequest.prototype.send = function(data) {{
-                    if (this._url && (this._url.includes('wp-json') || this._url.includes('wp-admin'))) {{
-                        console.log('🇺🇸 PROXY: Adding US headers to XHR:', this._url);
-                        this.setRequestHeader('X-Forwarded-For', '172.56.47.191');
-                        this.setRequestHeader('CF-IPCountry', 'US');
-                        this.setRequestHeader('X-Real-IP', '172.56.47.191');
-                    }}
-                    return originalXHRSend.call(this, data);
-                }};
-                
-                // Override navigator properties
-                Object.defineProperty(navigator, 'language', {{
-                    get: function() {{
-                        console.log('🇺🇸 PROXY: Spoofing navigator.language');
-                        return 'en-US';
-                    }}
-                }});
-                
-                Object.defineProperty(navigator, 'languages', {{
-                    get: function() {{
-                        console.log('🇺🇸 PROXY: Spoofing navigator.languages');
-                        return ['en-US', 'en'];
-                    }}
-                }});
-                
-                // Replace IP addresses in DOM content
-                function replaceIPsInDOM() {{
-                    try {{
-                        if (!document.body) {{
-                            console.log('🇺🇸 PROXY: Document body not ready yet');
-                            return;
-                        }}
-                        
-                        const walker = document.createTreeWalker(
-                            document.body,
-                            NodeFilter.SHOW_TEXT,
-                            null,
-                            false
-                        );
-                        
-                        let node;
-                        const ipRegex = /\\b(?:[0-9]{{1,3}}\\.)[0-9]{{1,3}}\\.[0-9]{{1,3}}\\.[0-9]{{1,3}}\\b/g;
-                        const replacements = [];
-                        
-                        while ((node = walker.nextNode())) {{
-                            if (node && node.textContent) {{
-                                let newText = node.textContent;
-                                let changed = false;
-                                
-                                // Replace IP addresses
-                                if (ipRegex.test(newText)) {{
-                                    newText = newText.replace(ipRegex, '172.56.47.191');
-                                    changed = true;
-                                }}
-                                
-                                // Replace location text
-                                if (newText.includes('India') || newText.includes('Bhubaneswar') || 
-                                    newText.includes('Asia/Calcutta') || newText.includes('en-GB')) {{
-                                    newText = newText.replace(/India/g, 'United States');
-                                    newText = newText.replace(/Bhubaneswar/g, 'New York');
-                                    newText = newText.replace(/Asia\/Calcutta/g, 'America/New_York');
-                                    newText = newText.replace(/en-GB/g, 'en-US');
-                                    changed = true;
-                                }}
-                                
-                                if (changed && newText !== node.textContent) {{
-                                    console.log('🇺🇸 PROXY: Replacing location in DOM:', node.textContent.substring(0, 50), '->', newText.substring(0, 50));
-                                    replacements.push({{node: node, newText: newText}});
-                                }}
-                            }}
-                        }}
-                        
-                        replacements.forEach(function(replacement) {{
-                            if (replacement.node && replacement.node.textContent !== undefined) {{
-                                replacement.node.textContent = replacement.newText;
-                            }}
-                        }});
-                        
-                        console.log('🇺🇸 PROXY: IP replacement completed, ' + replacements.length + ' replacements made');
-                    }} catch (error) {{
-                        console.error('🇺🇸 PROXY: Error in replaceIPsInDOM:', error);
-                    }}
-                }}
-                
-                // Run IP replacement periodically
-                setTimeout(replaceIPsInDOM, 100);
-                setTimeout(replaceIPsInDOM, 500);
-                setTimeout(replaceIPsInDOM, 1000);
-                setTimeout(replaceIPsInDOM, 2000);
-                
-                // Monitor for dynamic content changes
-                if (window.MutationObserver) {{
-                    const observer = new MutationObserver(function(mutations) {{
-                        let shouldReplace = false;
-                        for (let i = 0; i < mutations.length; i++) {{
-                            const mutation = mutations[i];
-                            if (mutation.type === 'childList' || mutation.type === 'characterData') {{
-                                shouldReplace = true;
-                                break;
-                            }}
-                        }}
-                        if (shouldReplace) {{
-                            setTimeout(replaceIPsInDOM, 50);
-                        }}
-                    }});
-                    
-                    observer.observe(document.body, {{
-                        childList: true,
-                        subtree: true,
-                        characterData: true
-                    }});
-                }}
-                
-                console.log('🇺🇸 PROXY: US location spoofing initialized successfully!');
-                </script>
-                """
-                
-                # Add proxy status and inject script
-                status_html = f'<div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>'
-                
-                # Add base URL and meta tags for better rendering
-                base_url = f'https://{path.split("/")[2]}' if '://' in path else 'https://ybsq.xyz'
-                meta_tags = f'''
-                <base href="{base_url}/">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-                <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
-                <style>
-                    html, body {{
-                        overflow-x: auto !important;
-                        -webkit-text-size-adjust: 100% !important;
-                        width: auto !important;
-                        height: auto !important;
-                    }}
-                    * {{
-                        box-sizing: border-box !important;
-                    }}
-                    img {{
-                        max-width: 100% !important;
-                        height: auto !important;
-                    }}
-                </style>
-                '''
-                
-                # Inject script and meta tags in head for early execution
-                if '<head>' in content:
-                    content = content.replace('<head>', f'<head>{meta_tags}{spoof_script}')
-                else:
-                    content = meta_tags + spoof_script + content
-                    
-                # Add status indicator
-                content = content.replace('<body', f'<body>{status_html}')
-                
-                return HTMLResponse(content)
-            
     except Exception as e:
-        error_html = f"""
+        print(f"❌ Proxy error: {str(e)}")
+        return HTMLResponse(f"""
         <!DOCTYPE html>
         <html>
         <head>
             <title>Proxy Error</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .error {{ color: red; background: #ffe6e6; padding: 20px; border-radius: 10px; }}
+                .error {{ background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px; margin: 20px 0; }}
             </style>
         </head>
         <body>
             <h1>🌐 Proxy Browser V2</h1>
             <div class="error">
-                <h2>Connection Error</h2>
+                <h3>Connection Error</h3>
                 <p><strong>Error:</strong> {str(e)}</p>
-                <p>Please try again or check your proxy settings.</p>
+                <p><strong>URL:</strong> {path}</p>
             </div>
-            <button onclick="window.location.reload()">Try Again</button>
+            <button onclick="history.back()">← Back</button>
+            <button onclick="window.location.href='/'">🏠 Home</button>
         </body>
         </html>
-        """
-        return HTMLResponse(error_html)
-
-
+        """)
 
 if __name__ == "__main__":
     import uvicorn
