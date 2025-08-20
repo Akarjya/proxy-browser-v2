@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 import httpx
 import json
 import re
+from urllib.parse import quote
 
 app = FastAPI(title="Proxy Browser V2")
 
