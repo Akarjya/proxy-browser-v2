@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 import httpx
 import asyncio
-
+import brotli
 
 app = FastAPI(title="Proxy Browser V2 - CroxyProxy Style")
 
@@ -194,9 +194,36 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
             }}));
         }}
         
-        // Add US headers to all analytics requests
+        // Redirect GA4 calls to our custom endpoint
+        if (urlStr.includes('google-analytics.com/collect') || 
+            urlStr.includes('google-analytics.com/g/collect')) {{
+            console.log('🇺🇸 CROXYPROXY: Redirecting GA4 collect to custom endpoint');
+            
+            // Redirect to our custom GA4 endpoint that forces US location
+            const redirectUrl = urlStr.replace(
+                /https:\/\/(www\.)?google-analytics\.com\/(g\/)?collect/,
+                window.location.origin + '/ga4-collect'
+            );
+            
+            return originalFetch.call(this, redirectUrl, options);
+        }}
+        
+        // Allow other Google services with US headers
+        if (urlStr.includes('googletagmanager.com') ||
+            urlStr.includes('analytics.google.com')) {{
+            console.log('🇺🇸 CROXYPROXY: Adding US headers to Google services');
+            options.headers = {{
+                ...options.headers,
+                'CF-IPCountry': 'US',
+                'X-Forwarded-For': '172.56.47.191',
+                'X-Real-IP': '172.56.47.191',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }};
+        }}
+        
+        // Add US headers to all other Google services
         if (urlStr.includes('google') || urlStr.includes('analytics') || urlStr.includes('adsense')) {{
-            console.log('🇺🇸 CROXYPROXY: Adding US headers to analytics');
+            console.log('🇺🇸 CROXYPROXY: Adding US headers to Google services');
             options.headers = {{
                 ...options.headers,
                 'CF-IPCountry': 'US',
@@ -447,6 +474,57 @@ def ping():
 def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
 
+@app.get("/ga4-collect")
+@app.post("/ga4-collect")
+async def ga4_collect(request: Request):
+    """Custom GA4 collect endpoint that sends US location data"""
+    try:
+        # Get original GA4 parameters
+        params = dict(request.query_params)
+        
+        # Force US location parameters
+        params.update({
+            'uip': '172.56.47.191',  # User IP
+            'geoid': '21167',        # US geo ID
+            'ul': 'en-us',          # User language
+            'sr': '1920x1080',      # Screen resolution
+            'vp': '1920x1080',      # Viewport
+            'dr': 'https://ybsq.xyz',  # Document referrer
+        })
+        
+        # Build GA4 collect URL
+        ga4_url = "https://www.google-analytics.com/g/collect"
+        
+        # Create proxy client
+        proxy_url = get_proxy_url()
+        
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            timeout=10.0,
+            verify=False
+        ) as client:
+            # Send to GA4 with US headers
+            headers = {
+                "User-Agent": request.headers.get("User-Agent", ""),
+                "CF-IPCountry": "US",
+                "X-Forwarded-For": "172.56.47.191",
+                "X-Real-IP": "172.56.47.191",
+                "Accept-Language": "en-US,en;q=0.9"
+            }
+            
+            response = await client.get(ga4_url, params=params, headers=headers)
+            print(f"🎯 GA4: Sent collect request with US location - Status: {response.status_code}")
+            
+            return Response(
+                content=response.content,
+                media_type="image/gif",
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+            
+    except Exception as e:
+        print(f"❌ GA4 collect error: {e}")
+        return Response(content="", media_type="image/gif")
+
 @app.get("/proxy/{path:path}")
 async def proxy_page(path: str, request: Request):
     try:
@@ -473,18 +551,41 @@ async def proxy_page(path: str, request: Request):
         ) as client:
             response = await client.get(path, headers=headers)
             
-            # Handle Brotli compression by avoiding it
+            # Handle Brotli compression properly
             content_encoding = response.headers.get('content-encoding', '')
             if 'br' in content_encoding:
-                print("⚠️ Brotli compression detected, retrying without Brotli...")
-                headers["Accept-Encoding"] = "gzip, deflate"
-                headers["Cache-Control"] = "no-cache, no-store"
-                response = await client.get(path, headers=headers)
-                print("🔄 Retried without Brotli")
+                print("🔧 Brotli compression detected, decompressing...")
+                try:
+                    # Decompress Brotli content
+                    decompressed_content = brotli.decompress(response.content)
+                    # Create a new response with decompressed content
+                    response._content = decompressed_content
+                    response.headers['content-encoding'] = 'identity'
+                    print("✅ Brotli decompression successful")
+                except Exception as e:
+                    print(f"❌ Brotli decompression failed: {e}")
+                    # Fallback: retry without Brotli
+                    headers["Accept-Encoding"] = "gzip, deflate"
+                    headers["Cache-Control"] = "no-cache, no-store"
+                    response = await client.get(path, headers=headers)
+                    print("🔄 Retried without Brotli")
             
             print(f"📊 Status: {response.status_code} | Content-Type: {response.headers.get('content-type', 'unknown')}")
             
             content_type = response.headers.get('content-type', '').lower()
+            
+            # Special handling for GA4 collect requests
+            if 'google-analytics.com/collect' in path or 'google-analytics.com/g/collect' in path:
+                print("🎯 GA4: Intercepting collect request, forcing US location")
+                # Return success response to prevent real request
+                return Response(
+                    content="1x1.gif", 
+                    media_type="image/gif",
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "no-cache"
+                    }
+                )
             
             # Handle different content types properly
             if 'text/html' in content_type:
