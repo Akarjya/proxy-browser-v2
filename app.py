@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 import httpx
 import asyncio
+import brotli
 
 app = FastAPI(title="Proxy Browser V2 - CroxyProxy Style")
 
@@ -320,12 +321,24 @@ async def proxy_page(path: str, request: Request):
         ) as client:
             response = await client.get(path, headers=headers)
             
-            # Check for Brotli compression and retry if needed
-            if 'br' in response.headers.get('content-encoding', ''):
-                print("⚠️ Brotli compression detected, retrying with different headers...")
-                headers["Accept-Encoding"] = "gzip, deflate"
-                headers["Cache-Control"] = "no-cache, no-store"
-                response = await client.get(path, headers=headers)
+            # Handle Brotli compression properly
+            content_encoding = response.headers.get('content-encoding', '')
+            if 'br' in content_encoding:
+                print("🔧 Brotli compression detected, decompressing...")
+                try:
+                    # Decompress Brotli content
+                    decompressed_content = brotli.decompress(response.content)
+                    # Create a new response with decompressed content
+                    response._content = decompressed_content
+                    response.headers['content-encoding'] = 'identity'
+                    print("✅ Brotli decompression successful")
+                except Exception as e:
+                    print(f"❌ Brotli decompression failed: {e}")
+                    # Fallback: retry without Brotli
+                    headers["Accept-Encoding"] = "gzip, deflate"
+                    headers["Cache-Control"] = "no-cache, no-store"
+                    response = await client.get(path, headers=headers)
+                    print("🔄 Retried without Brotli")
             
             print(f"📊 Status: {response.status_code} | Content-Type: {response.headers.get('content-type', 'unknown')}")
             
