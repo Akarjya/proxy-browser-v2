@@ -1,38 +1,141 @@
 import os
 import sys
 from pathlib import Path
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+import httpx
+import asyncio
+import json
+import re
+from urllib.parse import urljoin, urlparse, quote, unquote
+from bs4 import BeautifulSoup
 
-# Add app directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+app = FastAPI(title="Proxy Browser V2")
 
-try:
-    from config.settings import get_settings
-    from app.core.app import app
-    
-    # Configure settings
-    settings = get_settings()
-    
-    # Create required directories
-    Path("logs").mkdir(exist_ok=True)
-    Path("app/static").mkdir(parents=True, exist_ok=True)
-    
-except ImportError as e:
-    print(f"Import error: {e}")
-    # Fallback to simple app
-    from fastapi import FastAPI
-    app = FastAPI(title="Proxy Browser V2")
-    
-    @app.get("/")
-    def root():
-        return {"message": "Proxy Browser V2 is running"}
-    
-    @app.get("/ping")
-    def ping():
-        return {"pong": True}
-    
-    @app.get("/health")
-    def health():
-        return {"status": "healthy", "service": "proxy-browser-v2"}
+# Simple proxy configuration
+PROXY_CONFIG = {
+    "server": os.environ.get("PROXY_SERVER", "pg.proxi.es:20000"),
+    "username": os.environ.get("PROXY_USERNAME", "KMwYgm4pR4upF6yX"),
+    "password": os.environ.get("PROXY_PASSWORD", "pMBwu34BjjGr5urD"),
+    "country": os.environ.get("PROXY_COUNTRY", "USA"),
+    "timezone": os.environ.get("SPOOF_TIMEZONE", "America/New_York"),
+    "language": os.environ.get("SPOOF_LANGUAGE", "en-US"),
+    "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://ybsq.xyz/")
+}
+
+# WebSocket connections
+connections = []
+
+@app.get("/")
+async def root():
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Proxy Browser V2</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .btn { background: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; }
+            .loading { display: none; }
+        </style>
+    </head>
+    <body>
+        <h1>🌐 Proxy Browser V2</h1>
+        <p>Browse with US IP address and location</p>
+        <button class="btn" onclick="startBrowsing()">Start Browsing</button>
+        <div class="loading" id="loading">Loading...</div>
+        <div id="content"></div>
+        
+        <script>
+            async function startBrowsing() {
+                document.getElementById('loading').style.display = 'block';
+                try {
+                    const response = await fetch('/proxy/ybsq.xyz');
+                    const html = await response.text();
+                    document.getElementById('content').innerHTML = html;
+                } catch (error) {
+                    document.getElementById('content').innerHTML = 'Error: ' + error.message;
+                }
+                document.getElementById('loading').style.display = 'none';
+            }
+        </script>
+    </body>
+    </html>
+    """)
+
+@app.get("/ping")
+def ping():
+    return {"pong": True}
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "proxy-browser-v2"}
+
+@app.get("/proxy/{path:path}")
+async def proxy_page(path: str):
+    try:
+        # Construct full URL
+        if not path.startswith('http'):
+            path = 'https://' + path
+        
+        # Create proxy client
+        proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
+        
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            timeout=30.0
+        ) as client:
+            # Add spoofed headers
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept-Language": PROXY_CONFIG['language'],
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "X-Forwarded-For": "8.8.8.8",
+                "CF-IPCountry": "US",
+                "X-Real-IP": "8.8.8.8"
+            }
+            
+            response = await client.get(path, headers=headers)
+            content = response.text
+            
+            # Rewrite URLs to go through our proxy
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Rewrite links
+            for link in soup.find_all('a', href=True):
+                if link['href'].startswith('http'):
+                    link['href'] = f"/proxy/{quote(link['href'])}"
+            
+            # Rewrite images
+            for img in soup.find_all('img', src=True):
+                if img['src'].startswith('http'):
+                    img['src'] = f"/proxy/{quote(img['src'])}"
+            
+            # Add proxy status
+            status_div = soup.new_tag('div')
+            status_div['style'] = 'position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;'
+            status_div.string = f"🇺🇸 US Proxy Active - {PROXY_CONFIG['country']}"
+            soup.body.insert(0, status_div)
+            
+            return HTMLResponse(str(soup))
+            
+    except Exception as e:
+        return HTMLResponse(f"<h1>Error</h1><p>{str(e)}</p>")
+
+@app.websocket("/ws/proxy")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    connections.append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle WebSocket messages
+            await websocket.send_text(json.dumps({"type": "pong"}))
+    except WebSocketDisconnect:
+        connections.remove(websocket)
 
 if __name__ == "__main__":
     import uvicorn
