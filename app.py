@@ -389,30 +389,43 @@ async def proxy_page(path: str):
                 
                 // Replace IP addresses in DOM content
                 function replaceIPsInDOM() {{
-                    const walker = document.createTreeWalker(
-                        document.body,
-                        NodeFilter.SHOW_TEXT,
-                        null,
-                        false
-                    );
-                    
-                    let node;
-                    const ipRegex = /\\b(?:[0-9]{{1,3}}\\.)[0-9]{{1,3}}\\.[0-9]{{1,3}}\\.[0-9]{{1,3}}\\b/g;
-                    const replacements = [];
-                    
-                    while (node = walker.nextNode()) {{
-                        if (node.textContent && ipRegex.test(node.textContent)) {{
-                            const newText = node.textContent.replace(ipRegex, '172.56.47.191');
-                            if (newText !== node.textContent) {{
-                                console.log('🇺🇸 PROXY: Replacing IP in DOM:', node.textContent, '->', newText);
-                                replacements.push({{node, newText}});
+                    try {{
+                        if (!document.body) {{
+                            console.log('🇺🇸 PROXY: Document body not ready yet');
+                            return;
+                        }}
+                        
+                        const walker = document.createTreeWalker(
+                            document.body,
+                            NodeFilter.SHOW_TEXT,
+                            null,
+                            false
+                        );
+                        
+                        let node;
+                        const ipRegex = /\\b(?:[0-9]{{1,3}}\\.)[0-9]{{1,3}}\\.[0-9]{{1,3}}\\.[0-9]{{1,3}}\\b/g;
+                        const replacements = [];
+                        
+                        while ((node = walker.nextNode())) {{
+                            if (node && node.textContent && ipRegex.test(node.textContent)) {{
+                                const newText = node.textContent.replace(ipRegex, '172.56.47.191');
+                                if (newText !== node.textContent) {{
+                                    console.log('🇺🇸 PROXY: Replacing IP in DOM:', node.textContent.substring(0, 50), '->', newText.substring(0, 50));
+                                    replacements.push({{node: node, newText: newText}});
+                                }}
                             }}
                         }}
+                        
+                        replacements.forEach(function(replacement) {{
+                            if (replacement.node && replacement.node.textContent !== undefined) {{
+                                replacement.node.textContent = replacement.newText;
+                            }}
+                        }});
+                        
+                        console.log('🇺🇸 PROXY: IP replacement completed, ' + replacements.length + ' replacements made');
+                    }} catch (error) {{
+                        console.error('🇺🇸 PROXY: Error in replaceIPsInDOM:', error);
                     }}
-                    
-                    replacements.forEach(({node, newText}) => {{
-                        node.textContent = newText;
-                    }});
                 }}
                 
                 // Run IP replacement periodically
@@ -425,11 +438,13 @@ async def proxy_page(path: str):
                 if (window.MutationObserver) {{
                     const observer = new MutationObserver(function(mutations) {{
                         let shouldReplace = false;
-                        mutations.forEach(function(mutation) {{
+                        for (let i = 0; i < mutations.length; i++) {{
+                            const mutation = mutations[i];
                             if (mutation.type === 'childList' || mutation.type === 'characterData') {{
                                 shouldReplace = true;
+                                break;
                             }}
-                        }});
+                        }}
                         if (shouldReplace) {{
                             setTimeout(replaceIPsInDOM, 50);
                         }}
