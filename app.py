@@ -179,15 +179,47 @@ async def proxy_page(path: str):
             
             content = response.text
             
-            # Simple URL rewriting with regex (no BeautifulSoup)
-            content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
-            content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
-            
-            # Add proxy status
-            status_html = f'<div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>'
-            content = content.replace('<body', f'<body>{status_html}')
-            
-            return HTMLResponse(content)
+            # Check if it's JSON response (like httpbin)
+            if response.headers.get('content-type', '').startswith('application/json'):
+                # Format JSON nicely for display
+                json_content = json.loads(content)
+                formatted_content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Proxy Response</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; padding: 20px; }}
+                        .status {{ position: fixed; top: 10px; right: 10px; background: green; color: white; padding: 10px; border-radius: 5px; z-index: 9999; }}
+                        .json {{ background: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0; }}
+                        pre {{ font-size: 16px; line-height: 1.5; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="status">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>
+                    <h1>Proxy Response</h1>
+                    <p><strong>URL:</strong> {path}</p>
+                    <p><strong>Status:</strong> {response.status_code}</p>
+                    <div class="json">
+                        <h3>Response Data:</h3>
+                        <pre>{json.dumps(json_content, indent=2)}</pre>
+                    </div>
+                    <button onclick="window.location.reload()">Refresh</button>
+                </body>
+                </html>
+                """
+                return HTMLResponse(formatted_content)
+            else:
+                # Regular HTML content
+                # Simple URL rewriting with regex (no BeautifulSoup)
+                content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
+                content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
+                
+                # Add proxy status
+                status_html = f'<div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>'
+                content = content.replace('<body', f'<body>{status_html}')
+                
+                return HTMLResponse(content)
             
     except Exception as e:
         error_html = f"""
