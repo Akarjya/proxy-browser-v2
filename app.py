@@ -18,7 +18,7 @@ PROXY_CONFIG = {
     "country": os.environ.get("PROXY_COUNTRY", "USA"),
     "timezone": os.environ.get("SPOOF_TIMEZONE", "America/New_York"),
     "language": os.environ.get("SPOOF_LANGUAGE", "en-US"),
-    "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://ybsq.xyz/")
+    "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://httpbin.org/ip")
 }
 
 # Simple app
@@ -47,9 +47,25 @@ async def root():
             async function startBrowsing() {
                 document.getElementById('loading').style.display = 'block';
                 try {
-                    const response = await fetch('/proxy/ybsq.xyz');
-                    const html = await response.text();
-                    document.getElementById('content').innerHTML = html;
+                    // Try multiple sites
+                    const sites = [
+                        '/proxy/httpbin.org/ip',
+                        '/proxy/example.com',
+                        '/proxy/ybsq.xyz'
+                    ];
+                    
+                    for (const site of sites) {
+                        try {
+                            const response = await fetch(site);
+                            if (response.ok) {
+                                const html = await response.text();
+                                document.getElementById('content').innerHTML = html;
+                                break;
+                            }
+                        } catch (e) {
+                            console.log(`Failed to load ${site}:`, e);
+                        }
+                    }
                 } catch (error) {
                     document.getElementById('content').innerHTML = 'Error: ' + error.message;
                 }
@@ -104,18 +120,43 @@ async def proxy_page(path: str):
         ) as client:
             # Add spoofed headers
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept-Language": PROXY_CONFIG['language'],
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Encoding": "gzip, deflate",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                "Accept-Encoding": "gzip, deflate, br",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Cache-Control": "max-age=0",
                 "X-Forwarded-For": "8.8.8.8",
                 "CF-IPCountry": "US",
-                "X-Real-IP": "8.8.8.8"
+                "X-Real-IP": "8.8.8.8",
+                "X-Forwarded-Proto": "https",
+                "X-Forwarded-Host": "ybsq.xyz"
             }
             
             response = await client.get(path, headers=headers)
+            print(f"Response status: {response.status_code}")
+            print(f"Response headers: {dict(response.headers)}")
+            
+            if response.status_code == 403:
+                return HTMLResponse(f"""
+                <!DOCTYPE html>
+                <html>
+                <head><title>403 Forbidden</title></head>
+                <body>
+                    <h1>403 - Forbidden</h1>
+                    <p>The target site is blocking proxy requests.</p>
+                    <p>Status: {response.status_code}</p>
+                    <p>Headers: {dict(response.headers)}</p>
+                    <button onclick="window.location.reload()">Try Again</button>
+                </body>
+                </html>
+                """)
+            
             content = response.text
             
             # Simple URL rewriting with regex (no BeautifulSoup)
