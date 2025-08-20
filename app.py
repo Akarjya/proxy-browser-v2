@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 import httpx
 import json
 import re
@@ -163,7 +163,12 @@ async def proxy_page(path: str, request: Request):
             
             response = await client.get(path, headers=headers)
             print(f"Response status: {response.status_code}")
-            print(f"Response headers: {dict(response.headers)}")
+            
+            # Only log headers for main HTML pages, not resources
+            if 'text/html' in response.headers.get('content-type', ''):
+                print(f"Response headers: {dict(response.headers)}")
+            else:
+                print(f"Content-Type: {response.headers.get('content-type', 'unknown')}")
             
             # Check for unsupported content encoding
             content_encoding = response.headers.get('content-encoding', '')
@@ -220,8 +225,27 @@ async def proxy_page(path: str, request: Request):
                 </html>
                 """)
             
+            # Handle different content types
+            content_type = response.headers.get('content-type', '')
+            
+            # For CSS and JS files, return as-is with proper headers
+            if 'text/css' in content_type or 'application/javascript' in content_type or 'text/javascript' in content_type:
+                return Response(
+                    content=response.content,
+                    media_type=content_type,
+                    headers={"Access-Control-Allow-Origin": "*"}
+                )
+            
+            # For images and other binary content
+            if 'image/' in content_type or 'application/octet-stream' in content_type:
+                return Response(
+                    content=response.content,
+                    media_type=content_type,
+                    headers={"Access-Control-Allow-Origin": "*"}
+                )
+            
             # Check if it's JSON response (like httpbin)
-            if response.headers.get('content-type', '').startswith('application/json'):
+            if content_type.startswith('application/json'):
                 # Format JSON nicely for display
                 json_content = json.loads(content)
                 formatted_content = f"""
@@ -252,9 +276,20 @@ async def proxy_page(path: str, request: Request):
                 return HTMLResponse(formatted_content)
             else:
                 # Regular HTML content
-                # Simple URL rewriting with regex (no BeautifulSoup)
+                # Enhanced URL rewriting for better resource loading
+                # Rewrite absolute URLs in href attributes
                 content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
+                
+                # Rewrite absolute URLs in src attributes  
                 content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
+                
+                # Rewrite CSS @import and url() references
+                content = re.sub(r'@import\s+["\']([^"\']+)["\']', r'@import "/proxy/\1"', content)
+                content = re.sub(r'url\(["\']?([^"\'\\)]+)["\']?\)', r'url("/proxy/\1")', content)
+                
+                # Rewrite JavaScript fetch/XMLHttpRequest URLs
+                content = re.sub(r'fetch\(["\']([^"\']+)["\']', r'fetch("/proxy/\1"', content)
+                content = re.sub(r'XMLHttpRequest.*open\(["\'][^"\']*["\'],\s*["\']([^"\']+)["\']', r'XMLHttpRequest.open("GET", "/proxy/\1"', content)
                 
                 # Server-side location text replacement
                 if any(term in content for term in ['India', 'Bhubaneswar', 'Asia/Calcutta', 'en-GB', 'Unknown']):
@@ -345,11 +380,10 @@ async def proxy_page(path: str, request: Request):
                         console.log('🇺🇸 PROXY: Intercepting fetch:', urlStr);
                     }}
                     
-                    // Block or redirect IP detection services
-                    if (urlStr.includes('ipapi.co') || urlStr.includes('api.ipify.org') || 
-                        urlStr.includes('ipinfo.io') || urlStr.includes('ip-api.com') ||
-                        urlStr.includes('whatismyipaddress.com') || urlStr.includes('myip.com') ||
-                        urlStr.includes('geoip') || urlStr.includes('location') || urlStr.includes('geolocation')) {{
+                    // Block or redirect ONLY specific IP detection services (not all location APIs)
+                    if (urlStr.includes('ipapi.co/json') || urlStr.includes('api.ipify.org') || 
+                        urlStr.includes('ipinfo.io/json') || urlStr.includes('ip-api.com/json') ||
+                        urlStr.includes('whatismyipaddress.com') || urlStr.includes('myip.com')) {{
                         console.log('🇺🇸 PROXY: Blocking IP/Location detection API:', urlStr);
                         return Promise.resolve(new Response(JSON.stringify({{
                             ip: "172.56.47.191",
@@ -552,11 +586,34 @@ async def proxy_page(path: str, request: Request):
                 # Add proxy status and inject script
                 status_html = f'<div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>'
                 
-                # Inject script in head for early execution
+                # Add base URL and meta tags for better rendering
+                base_url = f'https://{path.split("/")[2]}' if '://' in path else 'https://ybsq.xyz'
+                meta_tags = f'''
+                <base href="{base_url}/">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+                <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+                <style>
+                    html, body {{
+                        overflow-x: auto !important;
+                        -webkit-text-size-adjust: 100% !important;
+                        width: auto !important;
+                        height: auto !important;
+                    }}
+                    * {{
+                        box-sizing: border-box !important;
+                    }}
+                    img {{
+                        max-width: 100% !important;
+                        height: auto !important;
+                    }}
+                </style>
+                '''
+                
+                # Inject script and meta tags in head for early execution
                 if '<head>' in content:
-                    content = content.replace('<head>', f'<head>{spoof_script}')
+                    content = content.replace('<head>', f'<head>{meta_tags}{spoof_script}')
                 else:
-                    content = spoof_script + content
+                    content = meta_tags + spoof_script + content
                     
                 # Add status indicator
                 content = content.replace('<body', f'<body>{status_html}')
