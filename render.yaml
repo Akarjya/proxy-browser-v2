@@ -2,14 +2,12 @@ services:
   - type: web
     name: proxy-browser-v2
     runtime: docker
-    plan: standard
+    plan: free
     buildCommand: ""
     dockerfilePath: ./Dockerfile
     envVars:
       - key: PYTHONUNBUFFERED
         value: 1
-      - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /app/.playwright
       - key: PROXY_TYPE
         value: http
       - key: PROXY_SERVER
@@ -34,9 +32,5 @@ services:
         value: USD
       - key: DEFAULT_TARGET_URL
         value: https://ybsq.xyz/
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ENCRYPTION_KEY
-        generateValue: true
-    autoDeploy: false
-    healthCheckPath: /health
+    healthCheckPath: /ping
+    autoDeploy: true
