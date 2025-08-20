@@ -3,7 +3,7 @@ services:
     name: proxy-browser-v2-python
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements-minimal.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python app.py
     envVars:
       - key: PYTHONUNBUFFERED

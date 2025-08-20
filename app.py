@@ -1,13 +1,11 @@
 import os
 import sys
 from pathlib import Path
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import httpx
-import asyncio
 import json
-import re
-from urllib.parse import urljoin, urlparse, quote, unquote
+from urllib.parse import quote
 from bs4 import BeautifulSoup
 
 app = FastAPI(title="Proxy Browser V2")
@@ -23,8 +21,7 @@ PROXY_CONFIG = {
     "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://ybsq.xyz/")
 }
 
-# WebSocket connections
-connections = []
+# Simple app
 
 @app.get("/")
 async def root():
@@ -125,17 +122,7 @@ async def proxy_page(path: str):
     except Exception as e:
         return HTMLResponse(f"<h1>Error</h1><p>{str(e)}</p>")
 
-@app.websocket("/ws/proxy")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    connections.append(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Handle WebSocket messages
-            await websocket.send_text(json.dumps({"type": "pong"}))
-    except WebSocketDisconnect:
-        connections.remove(websocket)
+
 
 if __name__ == "__main__":
     import uvicorn
