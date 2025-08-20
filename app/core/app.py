@@ -20,7 +20,7 @@ from app.core.websocket_manager import WebSocketManager
 from app.services.proxy_service import ProxyService
 from app.services.simple_proxy import SimpleProxyService
 from app.services.direct_proxy import DirectProxyService
-from app.services.browser_pool import BrowserPoolManager
+# from app.services.browser_pool import BrowserPoolManager  # Disabled for Railway
 from app.services.session_manager import SessionManager
 from app.services.content_rewriter import ContentRewriter
 from app.middleware.security import SecurityMiddleware
@@ -31,7 +31,7 @@ settings = get_settings()
 
 # Global managers
 ws_manager: Optional[WebSocketManager] = None
-browser_pool: Optional[BrowserPoolManager] = None
+# browser_pool: Optional[BrowserPoolManager] = None  # Disabled for Railway
 session_manager: Optional[SessionManager] = None
 proxy_service: Optional[ProxyService] = None
 simple_proxy: Optional[SimpleProxyService] = None
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize managers
     ws_manager = WebSocketManager()
-    browser_pool = BrowserPoolManager(settings)
+    # browser_pool = BrowserPoolManager(settings)  # Disabled for Railway
     session_manager = SessionManager(settings)
     proxy_service = ProxyService(settings)
     simple_proxy = SimpleProxyService(settings)
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     
     # Store in app state for access in routes
     app.state.ws_manager = ws_manager
-    app.state.browser_pool = browser_pool
+    # app.state.browser_pool = browser_pool  # Disabled for Railway
     app.state.session_manager = session_manager
     app.state.proxy_service = proxy_service
     app.state.simple_proxy = simple_proxy
@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI):
     # Initialize session manager
     await session_manager.initialize()
     
-    # Start browser pool
-    await browser_pool.initialize()
+    # Start browser pool (disabled for Railway deployment)
+    # await browser_pool.initialize()
     
     # Start background tasks
     asyncio.create_task(ws_manager.heartbeat_sender())
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     
     # Cleanup on shutdown
     logger.info("Shutting down application...")
-    await browser_pool.cleanup()
+    # await browser_pool.cleanup()  # Disabled for Railway
     await session_manager.cleanup()
     await ws_manager.disconnect_all()
     logger.info("Application shutdown complete")
