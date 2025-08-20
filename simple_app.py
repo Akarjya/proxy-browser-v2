@@ -15,6 +15,7 @@ def ping():
 def health():
     return {"status": "healthy"}
 
+# For direct execution
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))

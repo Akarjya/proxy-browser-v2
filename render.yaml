@@ -1,10 +1,10 @@
 services:
   - type: web
     name: proxy-browser-v2
-    runtime: docker
+    runtime: python
     plan: free
-    buildCommand: ""
-    dockerfilePath: ./Dockerfile
+    buildCommand: pip install fastapi uvicorn
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHONUNBUFFERED
         value: 1
