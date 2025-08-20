@@ -219,9 +219,7 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
     else:
         content = f'<html><head>{meta_viewport}{spoof_script}</head><body>{content}</body></html>'
     
-    # Add status indicator
-    status_div = '<div style="position:fixed;top:10px;right:10px;background:#28a745;color:white;padding:8px 12px;border-radius:5px;z-index:999999;font-size:12px;font-family:Arial;">🇺🇸 US Proxy Active</div>'
-    content = content.replace('<body', f'<body>{status_div}')
+    # Don't add status indicator (user requested removal)
     
     return content
 
@@ -272,8 +270,16 @@ async def root():
         <div class="container">
             <h1>🌐 Proxy Browser V2</h1>
             <p>Browse with US IP address and location</p>
+            <button class="btn" onclick="window.location.href='/proxy/https://example.com/'">
+                Test Example.com
+            </button>
+            <br><br>
+            <button class="btn" onclick="window.location.href='/proxy/https://httpbin.org/ip'">
+                Test IP Detection
+            </button>
+            <br><br>
             <button class="btn" onclick="window.location.href='/proxy/https://ybsq.xyz/'">
-                Start Browsing
+                Your Site (ybsq.xyz)
             </button>
         </div>
     </body>
@@ -314,6 +320,13 @@ async def proxy_page(path: str, request: Request):
         ) as client:
             response = await client.get(path, headers=headers)
             
+            # Check for Brotli compression and retry if needed
+            if 'br' in response.headers.get('content-encoding', ''):
+                print("⚠️ Brotli compression detected, retrying with different headers...")
+                headers["Accept-Encoding"] = "gzip, deflate"
+                headers["Cache-Control"] = "no-cache, no-store"
+                response = await client.get(path, headers=headers)
+            
             print(f"📊 Status: {response.status_code} | Content-Type: {response.headers.get('content-type', 'unknown')}")
             
             content_type = response.headers.get('content-type', '').lower()
@@ -323,6 +336,32 @@ async def proxy_page(path: str, request: Request):
                 # HTML content - process and rewrite
                 try:
                     html_content = response.text
+                    
+                    # Check if content is garbled (Brotli issue)
+                    if len([c for c in html_content[:200] if ord(c) > 127]) > 100:
+                        print("❌ Content appears garbled, likely compression issue")
+                        return HTMLResponse(f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Content Error</title>
+                            <style>
+                                body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                                .error {{ background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px; }}
+                            </style>
+                        </head>
+                        <body>
+                            <h1>🌐 Proxy Browser V2</h1>
+                            <div class="error">
+                                <h3>Content Encoding Error</h3>
+                                <p>The website returned compressed content that couldn't be decoded.</p>
+                                <p><strong>URL:</strong> {path}</p>
+                                <p>Try refreshing or use a different site.</p>
+                            </div>
+                            <button onclick="window.location.href='/'">🏠 Home</button>
+                        </body>
+                        </html>
+                        """)
                     
                     # Rewrite content like CroxyProxy
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
