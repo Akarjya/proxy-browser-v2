@@ -22,5 +22,15 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    import sys
+    
+    # Get port from environment variable or default to 8000
+    port_str = os.environ.get("PORT", "8000")
+    try:
+        port = int(port_str)
+    except ValueError:
+        print(f"Invalid PORT value: {port_str}, using default 8000")
+        port = 8000
+    
+    print(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
