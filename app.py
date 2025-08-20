@@ -5,8 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import httpx
 import json
-from urllib.parse import quote
-from bs4 import BeautifulSoup
+import re
 
 app = FastAPI(title="Proxy Browser V2")
 
@@ -98,26 +97,15 @@ async def proxy_page(path: str):
             response = await client.get(path, headers=headers)
             content = response.text
             
-            # Rewrite URLs to go through our proxy
-            soup = BeautifulSoup(content, 'html.parser')
-            
-            # Rewrite links
-            for link in soup.find_all('a', href=True):
-                if link['href'].startswith('http'):
-                    link['href'] = f"/proxy/{quote(link['href'])}"
-            
-            # Rewrite images
-            for img in soup.find_all('img', src=True):
-                if img['src'].startswith('http'):
-                    img['src'] = f"/proxy/{quote(img['src'])}"
+            # Simple URL rewriting with regex (no BeautifulSoup)
+            content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
+            content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
             
             # Add proxy status
-            status_div = soup.new_tag('div')
-            status_div['style'] = 'position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;'
-            status_div.string = f"🇺🇸 US Proxy Active - {PROXY_CONFIG['country']}"
-            soup.body.insert(0, status_div)
+            status_html = f'<div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>'
+            content = content.replace('<body', f'<body>{status_html}')
             
-            return HTMLResponse(str(soup))
+            return HTMLResponse(content)
             
     except Exception as e:
         return HTMLResponse(f"<h1>Error</h1><p>{str(e)}</p>")
