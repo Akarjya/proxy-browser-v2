@@ -1,0 +1,152 @@
+2025-08-20 10:25:54 | INFO | 
+    ╔══════════════════════════════════════════════════════╗
+    ║                                                      ║
+    ║            🌐 Proxy Browser V2 Starting 🌐           ║
+    ║                                                      ║
+    ║  Advanced Geographic Spoofing & Analytics Handling   ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+    
+2025-08-20 10:25:54 | INFO | Configuration:
+2025-08-20 10:25:54 | INFO |   • Host: 0.0.0.0:8000
+2025-08-20 10:25:54 | INFO |   • Proxy Country: USA
+2025-08-20 10:25:54 | INFO |   • Proxy City: NewYorkCity
+2025-08-20 10:25:54 | INFO |   • Spoof Timezone: America/New_York
+2025-08-20 10:25:54 | INFO |   • Browser Pool Size: 10
+2025-08-20 10:25:54 | INFO |   • Debug Mode: False
+2025-08-20 10:25:55 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:25:55 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:25:55 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:25:55 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:25:55 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:25:55 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:25:55 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:25:55 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:25:55 | INFO | Using in-memory session storage
+2025-08-20 10:25:55 | INFO | Using in-memory session storage
+2025-08-20 10:25:55 | INFO | Using in-memory session storage
+2025-08-20 10:25:55 | INFO | Using in-memory session storage
+2025-08-20 10:25:55 | INFO | Session manager initialized
+2025-08-20 10:25:55 | INFO | Session manager initialized
+2025-08-20 10:25:55 | INFO | Initializing browser pool...
+2025-08-20 10:25:55 | INFO | Session manager initialized
+2025-08-20 10:25:55 | INFO | Session manager initialized
+2025-08-20 10:25:55 | INFO | Initializing browser pool...
+2025-08-20 10:25:55 | INFO | Initializing browser pool...
+2025-08-20 10:25:55 | INFO | Initializing browser pool...
+2025-08-20 10:25:55 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:25:55 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:25:55 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:25:55 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:26:22 | INFO | 
+    ╔══════════════════════════════════════════════════════╗
+    ║                                                      ║
+    ║            🌐 Proxy Browser V2 Starting 🌐           ║
+    ║                                                      ║
+    ║  Advanced Geographic Spoofing & Analytics Handling   ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+    
+2025-08-20 10:26:22 | INFO | Configuration:
+2025-08-20 10:26:22 | INFO |   • Host: 0.0.0.0:8000
+2025-08-20 10:26:22 | INFO |   • Proxy Country: USA
+2025-08-20 10:26:22 | INFO |   • Proxy City: NewYorkCity
+2025-08-20 10:26:22 | INFO |   • Spoof Timezone: America/New_York
+2025-08-20 10:26:22 | INFO |   • Browser Pool Size: 10
+2025-08-20 10:26:22 | INFO |   • Debug Mode: False
+2025-08-20 10:26:38 | INFO | 
+    ╔══════════════════════════════════════════════════════╗
+    ║                                                      ║
+    ║            🌐 Proxy Browser V2 Starting 🌐           ║
+    ║                                                      ║
+    ║  Advanced Geographic Spoofing & Analytics Handling   ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+    
+2025-08-20 10:26:38 | INFO | Configuration:
+2025-08-20 10:26:38 | INFO |   • Host: 0.0.0.0:8000
+2025-08-20 10:26:38 | INFO |   • Proxy Country: USA
+2025-08-20 10:26:38 | INFO |   • Proxy City: NewYorkCity
+2025-08-20 10:26:38 | INFO |   • Spoof Timezone: America/New_York
+2025-08-20 10:26:38 | INFO |   • Browser Pool Size: 10
+2025-08-20 10:26:38 | INFO |   • Debug Mode: False
+2025-08-20 10:26:38 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:26:38 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:26:38 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:26:38 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:26:38 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:26:38 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:26:38 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:26:38 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:26:38 | INFO | Using in-memory session storage
+2025-08-20 10:26:38 | INFO | Using in-memory session storage
+2025-08-20 10:26:38 | INFO | Using in-memory session storage
+2025-08-20 10:26:38 | INFO | Using in-memory session storage
+2025-08-20 10:26:38 | INFO | Session manager initialized
+2025-08-20 10:26:38 | INFO | Session manager initialized
+2025-08-20 10:26:38 | INFO | Session manager initialized
+2025-08-20 10:26:38 | INFO | Session manager initialized
+2025-08-20 10:26:38 | INFO | Initializing browser pool...
+2025-08-20 10:26:38 | INFO | Initializing browser pool...
+2025-08-20 10:26:38 | INFO | Initializing browser pool...
+2025-08-20 10:26:38 | INFO | Initializing browser pool...
+2025-08-20 10:26:39 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:26:39 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:26:39 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:26:39 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:27:26 | INFO | 
+    ╔══════════════════════════════════════════════════════╗
+    ║                                                      ║
+    ║            🌐 Proxy Browser V2 Starting 🌐           ║
+    ║                                                      ║
+    ║  Advanced Geographic Spoofing & Analytics Handling   ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+    
+2025-08-20 10:27:26 | INFO | Configuration:
+2025-08-20 10:27:26 | INFO |   • Host: 0.0.0.0:8000
+2025-08-20 10:27:26 | INFO |   • Proxy Country: USA
+2025-08-20 10:27:26 | INFO |   • Proxy City: NewYorkCity
+2025-08-20 10:27:26 | INFO |   • Spoof Timezone: America/New_York
+2025-08-20 10:27:26 | INFO |   • Browser Pool Size: 10
+2025-08-20 10:27:26 | INFO |   • Debug Mode: False
+2025-08-20 10:27:49 | INFO | 
+    ╔══════════════════════════════════════════════════════╗
+    ║                                                      ║
+    ║            🌐 Proxy Browser V2 Starting 🌐           ║
+    ║                                                      ║
+    ║  Advanced Geographic Spoofing & Analytics Handling   ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+    
+2025-08-20 10:27:49 | INFO | Configuration:
+2025-08-20 10:27:49 | INFO |   • Host: 0.0.0.0:8000
+2025-08-20 10:27:49 | INFO |   • Proxy Country: USA
+2025-08-20 10:27:49 | INFO |   • Proxy City: NewYorkCity
+2025-08-20 10:27:49 | INFO |   • Spoof Timezone: America/New_York
+2025-08-20 10:27:49 | INFO |   • Browser Pool Size: 10
+2025-08-20 10:27:49 | INFO |   • Debug Mode: False
+2025-08-20 10:27:50 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:27:50 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:27:50 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:27:50 | INFO | Starting Proxy Browser V2 v2.0.0
+2025-08-20 10:27:50 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:27:50 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:27:50 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:27:50 | WARNING | Failed to connect to Redis: Error 61 connecting to localhost:6379. 61.
+2025-08-20 10:27:50 | INFO | Using in-memory session storage
+2025-08-20 10:27:50 | INFO | Using in-memory session storage
+2025-08-20 10:27:50 | INFO | Using in-memory session storage
+2025-08-20 10:27:50 | INFO | Using in-memory session storage
+2025-08-20 10:27:50 | INFO | Session manager initialized
+2025-08-20 10:27:50 | INFO | Session manager initialized
+2025-08-20 10:27:50 | INFO | Session manager initialized
+2025-08-20 10:27:50 | INFO | Session manager initialized
+2025-08-20 10:27:50 | INFO | Initializing browser pool...
+2025-08-20 10:27:50 | INFO | Initializing browser pool...
+2025-08-20 10:27:50 | INFO | Initializing browser pool...
+2025-08-20 10:27:50 | INFO | Initializing browser pool...
+2025-08-20 10:27:50 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:27:50 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:27:50 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002
+2025-08-20 10:27:50 | INFO | Browser will use socks5 proxy: pg.proxi.es:20002

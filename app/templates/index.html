@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Browser V2 - Advanced Geographic Spoofing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #4A90E2;
+            --primary-dark: #357ABD;
+            --secondary: #50E3C2;
+            --danger: #E74C3C;
+            --success: #27AE60;
+            --warning: #F39C12;
+            --dark: #2C3E50;
+            --light: #ECF0F1;
+            --bg: #F8F9FA;
+            --border: #E1E8ED;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            color: var(--dark);
+            font-weight: 700;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .url-input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .status-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .status-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .status-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .status-connected {
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .status-disconnected {
+            background: var(--danger);
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(39, 174, 96, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(39, 174, 96, 0);
+            }
+        }
+
+        /* Browser Frame */
+        .browser-container {
+            flex: 1;
+            margin: 0 2rem 2rem;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .browser-frame {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-toolbar {
+            background: linear-gradient(to right, #F8F9FA, #E9ECEF);
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .browser-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .browser-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-close {
+            background: #FF5F57;
+        }
+
+        .btn-minimize {
+            background: #FFBD2E;
+        }
+
+        .btn-maximize {
+            background: #28CA42;
+        }
+
+        .browser-address {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .address-icon {
+            color: var(--success);
+        }
+
+        #browser-viewport {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: white;
+        }
+
+        /* Info Cards */
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .info-card h3 {
+            font-size: 0.9rem;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #F0F0F0;
+            font-size: 0.9rem;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #666;
+        }
+
+        .info-value {
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .status-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .browser-container {
+                margin: 0 1rem 1rem;
+            }
+
+            .browser-frame {
+                height: 60vh;
+            }
+        }
+
+        /* Console */
+        .console {
+            background: #1E1E1E;
+            color: #D4D4D4;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+        }
+
+        .console-line {
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .console-time {
+            color: #666;
+        }
+
+        .console-level {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .console-level.info {
+            color: #4A90E2;
+        }
+
+        .console-level.success {
+            color: #27AE60;
+        }
+
+        .console-level.warning {
+            color: #F39C12;
+        }
+
+        .console-level.error {
+            color: #E74C3C;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🌐</div>
+                <h1>Proxy Browser V2</h1>
+            </div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">Connection</span>
+                    <span class="status-value">
+                        <span id="connection-indicator" class="status-indicator status-disconnected"></span>
+                        <span id="connection-status">Disconnected</span>
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Proxy Country</span>
+                    <span class="status-value" id="proxy-country">USA 🇺🇸</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Proxy IP</span>
+                    <span class="status-value" id="proxy-ip">---.---.---.---</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Session ID</span>
+                    <span class="status-value" id="session-id">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <div class="controls-grid">
+            <div class="url-input-group">
+                <input type="text" id="url-input" class="url-input" placeholder="Enter URL to browse..." value="https://www.whatismyipaddress.com/">
+            </div>
+            <button id="navigate-btn" class="btn btn-primary">
+                <span>🚀</span> Navigate
+            </button>
+            <button id="check-ip-btn" class="btn btn-success">
+                <span>📍</span> Check IP
+            </button>
+        </div>
+
+        <!-- Info Cards -->
+        <div class="info-cards">
+            <div class="info-card">
+                <h3>📍 Geographic Spoofing</h3>
+                <div class="info-item">
+                    <span class="info-label">Country:</span>
+                    <span class="info-value" id="spoof-country">USA</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">City:</span>
+                    <span class="info-value" id="spoof-city">New York</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Timezone:</span>
+                    <span class="info-value" id="spoof-timezone">America/New_York</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Language:</span>
+                    <span class="info-value" id="spoof-language">en-US</span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>📊 Analytics Trackers</h3>
+                <div class="info-item">
+                    <span class="info-label">GA4/Google:</span>
+                    <span class="info-value" id="tracker-ga4">Not Detected</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">AdSense:</span>
+                    <span class="info-value" id="tracker-adsense">Not Detected</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Facebook Pixel:</span>
+                    <span class="info-value" id="tracker-facebook">Not Detected</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Others:</span>
+                    <span class="info-value" id="tracker-others">None</span>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>📱 Device Info</h3>
+                <div class="info-item">
+                    <span class="info-label">Type:</span>
+                    <span class="info-value" id="device-type">Desktop</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Screen:</span>
+                    <span class="info-value" id="device-screen">1920x1080</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Touch:</span>
+                    <span class="info-value" id="device-touch">No</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Platform:</span>
+                    <span class="info-value" id="device-platform">Win32</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console -->
+        <div class="console" id="console">
+            <div class="console-line">
+                <span class="console-time">00:00:00</span>
+                <span class="console-level info">INFO</span>
+                <span>Proxy Browser V2 initialized</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browser Frame -->
+    <div class="browser-container">
+        <div class="browser-frame">
+            <div class="browser-toolbar">
+                <div class="browser-buttons">
+                    <button class="browser-btn btn-close"></button>
+                    <button class="browser-btn btn-minimize"></button>
+                    <button class="browser-btn btn-maximize"></button>
+                </div>
+                <div class="browser-address">
+                    <span class="address-icon">🔒</span>
+                    <span id="current-url">about:blank</span>
+                </div>
+            </div>
+            <iframe id="browser-viewport" src="about:blank"></iframe>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading">
+        <div class="loader"></div>
+    </div>
+
+    <script>
+        // WebSocket connection and main logic
+        class ProxyBrowser {
+            constructor() {
+                this.ws = null;
+                this.sessionId = null;
+                this.isConnected = false;
+                this.deviceInfo = this.collectDeviceInfo();
+                
+                this.init();
+            }
+
+            init() {
+                this.connectWebSocket();
+                this.setupEventListeners();
+                this.logToConsole('INFO', 'Proxy Browser V2 initialized');
+            }
+
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/proxy`;
+                
+                this.logToConsole('INFO', 'Connecting to WebSocket...');
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    this.isConnected = true;
+                    this.updateConnectionStatus(true);
+                    this.logToConsole('SUCCESS', 'WebSocket connected');
+                };
+
+                this.ws.onmessage = (event) => {
+                    this.handleMessage(JSON.parse(event.data));
+                };
+
+                this.ws.onerror = (error) => {
+                    this.logToConsole('ERROR', 'WebSocket error: ' + error);
+                };
+
+                this.ws.onclose = () => {
+                    this.isConnected = false;
+                    this.updateConnectionStatus(false);
+                    this.logToConsole('WARNING', 'WebSocket disconnected, reconnecting...');
+                    
+                    // Reconnect after 5 seconds with exponential backoff
+                    setTimeout(() => this.connectWebSocket(), 5000);
+                };
+            }
+
+            handleMessage(data) {
+                switch(data.type) {
+                    case 'init':
+                        this.sessionId = data.session_id;
+                        this.updateSessionInfo(data);
+                        this.sendDeviceInfo();
+                        break;
+                    
+                    case 'page_content':
+                        this.displayContent(data);
+                        break;
+                    
+                    case 'http_response':
+                        this.handleHttpResponse(data);
+                        break;
+                    
+                    case 'heartbeat':
+                        this.sendMessage({ type: 'ping' });
+                        break;
+                    
+                    case 'error':
+                        this.logToConsole('ERROR', data.message);
+                        break;
+                }
+            }
+
+            sendMessage(data) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(data));
+                }
+            }
+
+            sendDeviceInfo() {
+                this.sendMessage({
+                    type: 'device_info',
+                    device_info: this.deviceInfo
+                });
+            }
+
+            collectDeviceInfo() {
+                return {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    screenWidth: screen.width,
+                    screenHeight: screen.height,
+                    pixelRatio: window.devicePixelRatio,
+                    touchSupport: 'ontouchstart' in window,
+                    deviceMemory: navigator.deviceMemory,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    timezoneOffset: new Date().getTimezoneOffset(),
+                    connectionType: navigator.connection?.effectiveType
+                };
+            }
+
+            navigate(url) {
+                if (!this.isConnected) {
+                    this.logToConsole('ERROR', 'Not connected to proxy server');
+                    return;
+                }
+
+                // Trim whitespace from URL
+                url = url.trim();
+                
+                this.showLoading(true);
+                this.logToConsole('INFO', `Navigating to: ${url}`);
+
+                this.sendMessage({
+                    type: 'navigate',
+                    url: url,
+                    user_agent: this.deviceInfo.userAgent,
+                    is_mobile: this.isMobile()
+                });
+            }
+
+            isMobile() {
+                return /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
+            }
+
+            displayContent(data) {
+                const iframe = document.getElementById('browser-viewport');
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Write content to iframe
+                iframeDoc.open();
+                iframeDoc.write(data.content);
+                iframeDoc.close();
+
+                // Update current URL display
+                document.getElementById('current-url').textContent = data.url;
+                
+                // Check for trackers
+                this.detectTrackers(data.content);
+                
+                this.showLoading(false);
+                this.logToConsole('SUCCESS', 'Page loaded successfully');
+            }
+
+            detectTrackers(content) {
+                const trackers = {
+                    ga4: /gtag|google-analytics|googletagmanager/i.test(content),
+                    adsense: /googlesyndication|adsbygoogle/i.test(content),
+                    facebook: /facebook\.com\/tr|fbq/i.test(content),
+                    others: /hotjar|mixpanel|segment|amplitude/i.test(content)
+                };
+
+                document.getElementById('tracker-ga4').textContent = 
+                    trackers.ga4 ? '✅ Detected (Spoofed)' : '❌ Not Detected';
+                document.getElementById('tracker-adsense').textContent = 
+                    trackers.adsense ? '✅ Detected (Spoofed)' : '❌ Not Detected';
+                document.getElementById('tracker-facebook').textContent = 
+                    trackers.facebook ? '✅ Detected (Spoofed)' : '❌ Not Detected';
+                document.getElementById('tracker-others').textContent = 
+                    trackers.others ? '✅ Some Detected' : '❌ None';
+            }
+
+            async checkIP() {
+                this.showLoading(true);
+                this.logToConsole('INFO', 'Checking proxy IP...');
+
+                try {
+                    const response = await fetch('/api/proxy/check-ip', {
+                        headers: {
+                            'X-Session-ID': this.sessionId
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.proxy_active) {
+                        try {
+                            const ipInfo = JSON.parse(data.ip_info);
+                            document.getElementById('proxy-ip').textContent = ipInfo.ip || 'Unknown';
+                            this.logToConsole('SUCCESS', `Proxy IP: ${ipInfo.ip || 'Unknown'} (${ipInfo.city || 'Unknown'}, ${ipInfo.country_name || 'Unknown'})`);
+                        } catch (parseError) {
+                            this.logToConsole('WARNING', 'Could not parse IP info, but proxy is active');
+                            document.getElementById('proxy-ip').textContent = 'Active';
+                        }
+                        
+                        // Navigate to IP check website
+                        this.navigate('https://www.whatismyipaddress.com/');
+                    } else {
+                        this.logToConsole('ERROR', 'Proxy not active: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    this.logToConsole('ERROR', 'Failed to check IP: ' + error);
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                const indicator = document.getElementById('connection-indicator');
+                const status = document.getElementById('connection-status');
+                
+                if (connected) {
+                    indicator.className = 'status-indicator status-connected';
+                    status.textContent = 'Connected';
+                } else {
+                    indicator.className = 'status-indicator status-disconnected';
+                    status.textContent = 'Disconnected';
+                }
+            }
+
+            updateSessionInfo(data) {
+                document.getElementById('session-id').textContent = data.session_id.substring(0, 8) + '...';
+                document.getElementById('proxy-country').textContent = `${data.config.proxy_country} 🇺🇸`;
+                document.getElementById('spoof-country').textContent = data.config.proxy_country;
+                document.getElementById('spoof-timezone').textContent = data.config.timezone;
+                document.getElementById('spoof-language').textContent = data.config.language;
+                
+                // Update device info
+                document.getElementById('device-type').textContent = this.isMobile() ? 'Mobile' : 'Desktop';
+                document.getElementById('device-screen').textContent = `${screen.width}x${screen.height}`;
+                document.getElementById('device-touch').textContent = 'ontouchstart' in window ? 'Yes' : 'No';
+                document.getElementById('device-platform').textContent = navigator.platform;
+            }
+
+            showLoading(show) {
+                document.getElementById('loading').classList.toggle('active', show);
+            }
+
+            logToConsole(level, message) {
+                const console = document.getElementById('console');
+                const time = new Date().toLocaleTimeString();
+                
+                const line = document.createElement('div');
+                line.className = 'console-line';
+                line.innerHTML = `
+                    <span class="console-time">${time}</span>
+                    <span class="console-level ${level.toLowerCase()}">${level}</span>
+                    <span>${message}</span>
+                `;
+                
+                console.appendChild(line);
+                console.scrollTop = console.scrollHeight;
+            }
+
+            setupEventListeners() {
+                // Navigate button
+                document.getElementById('navigate-btn').addEventListener('click', () => {
+                    const url = document.getElementById('url-input').value.trim();
+                    if (url) {
+                        this.navigate(url);
+                    }
+                });
+
+                // Enter key in URL input
+                document.getElementById('url-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const url = e.target.value.trim();
+                        if (url) {
+                            this.navigate(url);
+                        }
+                    }
+                });
+
+                // Check IP button
+                document.getElementById('check-ip-btn').addEventListener('click', () => {
+                    this.checkIP();
+                });
+
+                // Intercept iframe navigation
+                const iframe = document.getElementById('browser-viewport');
+                iframe.addEventListener('load', () => {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        
+                        // Intercept link clicks
+                        iframeDoc.addEventListener('click', (e) => {
+                            if (e.target.tagName === 'A') {
+                                e.preventDefault();
+                                const href = e.target.href;
+                                if (href && href !== '#') {
+                                    this.navigate(href);
+                                }
+                            }
+                        });
+                    } catch (e) {
+                        // Cross-origin iframe, can't access
+                    }
+                });
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            window.proxyBrowser = new ProxyBrowser();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app/core/app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app/core/app.py"
+    }
+  ],
+  "env": {
+    "PYTHONUNBUFFERED": "1",
+    "PROXY_TYPE": "http",
+    "PROXY_SERVER": "pg.proxi.es:20000",
+    "PROXY_USERNAME": "KMwYgm4pR4upF6yX",
+    "PROXY_PASSWORD": "pMBwu34BjjGr5urD",
+    "PROXY_COUNTRY": "USA",
+    "PROXY_STATE": "NY", 
+    "PROXY_CITY": "NewYorkCity",
+    "USE_PROXIDISE_FORMAT": "true",
+    "SPOOF_TIMEZONE": "America/New_York",
+    "SPOOF_LANGUAGE": "en-US",
+    "SPOOF_CURRENCY": "USD",
+    "DEFAULT_TARGET_URL": "https://ybsq.xyz/"
+  }
+}

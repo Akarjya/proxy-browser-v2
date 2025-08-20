@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Browser</title>
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --primary-dark: #357ABD;
+            --success: #28A745;
+            --danger: #DC3545;
+            --warning: #FFC107;
+            --dark: #2C3E50;
+            --light: #F8F9FA;
+            --border: #E9ECEF;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .logo {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: var(--dark);
+            margin-bottom: 1rem;
+        }
+
+        .description {
+            color: #666;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 1rem 3rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+        }
+
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .start-btn:active {
+            transform: translateY(0);
+        }
+
+        .start-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading State */
+        .loading-container {
+            display: none;
+        }
+
+        .loading-container.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--dark);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .loading-status {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Browser View */
+        .browser-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #f5f5f5;
+            z-index: 1000;
+        }
+
+        .browser-container.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .back-btn {
+            background: var(--light);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .back-btn:hover {
+            background: var(--border);
+        }
+
+        .browser-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .url-display {
+            background: var(--light);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            flex: 1;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: var(--dark);
+        }
+
+        .proxy-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--success);
+            color: white;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        .browser-viewport {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: white;
+        }
+
+        /* Error State */
+        .error-message {
+            display: none;
+            color: var(--danger);
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(220, 53, 69, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="startContainer">
+        <div class="logo">🌐</div>
+        <h1>Secure Proxy Browser</h1>
+        <p class="description">
+            Browse securely with US IP address and location. 
+            Your real location and device information remain private.
+        </p>
+        <button class="start-btn" id="startBtn" onclick="startBrowsing()">
+            Start Browsing
+        </button>
+        
+        <div class="loading-container" id="loadingContainer">
+            <div class="spinner"></div>
+            <div class="loading-text">Connecting to proxy server...</div>
+            <div class="loading-status" id="loadingStatus">Establishing secure connection</div>
+        </div>
+        
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <div class="browser-container" id="browserContainer">
+        <div class="browser-header">
+            <button class="back-btn" onclick="goBack()">← Back</button>
+            <div class="browser-info">
+                <div class="url-display" id="urlDisplay">Loading...</div>
+                <div class="proxy-status">
+                    <span>🔒</span>
+                    <span>Proxy Active</span>
+                </div>
+            </div>
+        </div>
+        <iframe class="browser-viewport" id="browserViewport"></iframe>
+    </div>
+
+    <script>
+        let ws = null;
+        let sessionId = null;
+        let isConnected = false;
+
+        function generateSessionId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function updateLoadingStatus(status) {
+            document.getElementById('loadingStatus').textContent = status;
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+            setTimeout(() => errorEl.classList.remove('active'), 5000);
+        }
+
+        function showBrowser(content) {
+            // Hide start container
+            document.getElementById('startContainer').style.display = 'none';
+            
+            // Show browser container
+            const browserContainer = document.getElementById('browserContainer');
+            browserContainer.classList.add('active');
+            
+            // Update URL display
+            document.getElementById('urlDisplay').textContent = '{{ settings.default_target_url }}';
+            
+            // Get iframe
+            const iframe = document.getElementById('browserViewport');
+            
+            // Write content directly to iframe document
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(content);
+            iframeDoc.close();
+            
+            // Handle navigation after content is written
+            try {
+                // Override link clicks
+                iframeDoc.addEventListener('click', function(e) {
+                    const link = e.target.closest('a');
+                    if (link && link.href && !link.href.startsWith('javascript:')) {
+                        e.preventDefault();
+                        const url = link.href;
+                        
+                        // Send navigation request through WebSocket
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            // Show loading overlay
+                            document.getElementById('loadingContainer').classList.add('active');
+                            updateLoadingStatus('Loading page...');
+                            
+                            ws.send(JSON.stringify({
+                                type: 'navigate',
+                                url: url
+                            }));
+                        }
+                    }
+                }, true);
+            } catch(e) {
+                console.log('Iframe interaction limited');
+            }
+        }
+
+        function goBack() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            
+            // Hide browser and show start container
+            document.getElementById('browserContainer').classList.remove('active');
+            document.getElementById('startContainer').style.display = 'block';
+            document.getElementById('loadingContainer').classList.remove('active');
+            document.getElementById('startBtn').disabled = false;
+            
+            // Clear iframe
+            document.getElementById('browserViewport').srcdoc = '';
+        }
+
+        async function startBrowsing() {
+            const startBtn = document.getElementById('startBtn');
+            const loadingContainer = document.getElementById('loadingContainer');
+            
+            // Disable button and show loading
+            startBtn.disabled = true;
+            loadingContainer.classList.add('active');
+            
+            try {
+                // Generate session ID
+                sessionId = generateSessionId();
+                
+                // Connect to WebSocket
+                updateLoadingStatus('Connecting to proxy server...');
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws/proxy`);
+                
+                ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    isConnected = true;
+                    updateLoadingStatus('Connected! Loading website...');
+                    
+                    // Send init message
+                    ws.send(JSON.stringify({
+                        type: 'init',
+                        session_id: sessionId,
+                        settings: {
+                            spoof_timezone: 'America/New_York',
+                            spoof_language: 'en-US',
+                            spoof_country: 'US',
+                            spoof_latitude: 40.7128,
+                            spoof_longitude: -74.0060
+                        }
+                    }));
+                    
+                    // Send device info
+                    ws.send(JSON.stringify({
+                        type: 'device_info',
+                        device_info: {
+                            userAgent: navigator.userAgent,
+                            platform: navigator.platform,
+                            language: navigator.language,
+                            languages: navigator.languages,
+                            screenWidth: screen.width,
+                            screenHeight: screen.height,
+                            colorDepth: screen.colorDepth,
+                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                        }
+                    }));
+                    
+                    // Navigate to target URL
+                    setTimeout(() => {
+                        updateLoadingStatus('Fetching content through proxy...');
+                        ws.send(JSON.stringify({
+                            type: 'navigate',
+                            url: '{{ settings.default_target_url }}'
+                        }));
+                    }, 500);
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log('Received message:', data.type);
+                    
+                    if (data.type === 'page_content') {
+                        updateLoadingStatus('Content loaded successfully!');
+                        
+                        // Update URL if provided
+                        if (data.url) {
+                            document.getElementById('urlDisplay').textContent = data.url;
+                        }
+                        
+                        // Hide loading and show content
+                        setTimeout(() => {
+                            document.getElementById('loadingContainer').classList.remove('active');
+                            showBrowser(data.content);
+                        }, 500);
+                    } else if (data.type === 'error') {
+                        throw new Error(data.message || 'Connection error');
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    throw new Error('Failed to connect to proxy server');
+                };
+                
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    isConnected = false;
+                };
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message || 'An unexpected error occurred');
+                loadingContainer.classList.remove('active');
+                startBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

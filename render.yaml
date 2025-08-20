@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: proxy-browser-v2
+    runtime: docker
+    plan: standard
+    buildCommand: ""
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /app/.playwright
+      - key: PROXY_TYPE
+        value: http
+      - key: PROXY_SERVER
+        value: pg.proxi.es:20000
+      - key: PROXY_USERNAME
+        value: KMwYgm4pR4upF6yX
+      - key: PROXY_PASSWORD
+        value: pMBwu34BjjGr5urD
+      - key: PROXY_COUNTRY
+        value: USA
+      - key: PROXY_STATE
+        value: NY
+      - key: PROXY_CITY
+        value: NewYorkCity
+      - key: USE_PROXIDISE_FORMAT
+        value: "true"
+      - key: SPOOF_TIMEZONE
+        value: America/New_York
+      - key: SPOOF_LANGUAGE
+        value: en-US
+      - key: SPOOF_CURRENCY
+        value: USD
+      - key: DEFAULT_TARGET_URL
+        value: https://ybsq.xyz/
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+    autoDeploy: false
+    healthCheckPath: /health
