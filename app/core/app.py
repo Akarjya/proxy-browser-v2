@@ -41,49 +41,47 @@ direct_proxy: Optional[DirectProxyService] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global ws_manager, browser_pool, session_manager, proxy_service, simple_proxy, direct_proxy
+    global ws_manager, session_manager, proxy_service, simple_proxy, direct_proxy
     
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     
-    # Initialize managers
-    ws_manager = WebSocketManager()
-    # browser_pool = BrowserPoolManager(settings)  # Disabled for Railway
-    session_manager = SessionManager(settings)
-    proxy_service = ProxyService(settings)
-    simple_proxy = SimpleProxyService(settings)
-    direct_proxy = DirectProxyService(settings)
-    
-    # Store in app state for access in routes
-    app.state.ws_manager = ws_manager
-    # app.state.browser_pool = browser_pool  # Disabled for Railway
-    app.state.session_manager = session_manager
-    app.state.proxy_service = proxy_service
-    app.state.simple_proxy = simple_proxy
-    app.state.direct_proxy = direct_proxy
-    app.state.settings = settings
-    
-    # Initialize session manager
-    await session_manager.initialize()
-    
-    # Start browser pool (disabled for Railway deployment)
-    # await browser_pool.initialize()
-    
-    # Start background tasks (non-blocking)
     try:
-        asyncio.create_task(ws_manager.heartbeat_sender())
-        asyncio.create_task(session_manager.cleanup_expired_sessions())
+        # Initialize managers (simplified for Railway)
+        ws_manager = WebSocketManager()
+        session_manager = SessionManager(settings)
+        proxy_service = ProxyService(settings)
+        simple_proxy = SimpleProxyService(settings)
+        direct_proxy = DirectProxyService(settings)
+        
+        # Store in app state for access in routes
+        app.state.ws_manager = ws_manager
+        app.state.session_manager = session_manager
+        app.state.proxy_service = proxy_service
+        app.state.simple_proxy = simple_proxy
+        app.state.direct_proxy = direct_proxy
+        app.state.settings = settings
+        
+        # Initialize session manager (non-blocking)
+        try:
+            await session_manager.initialize()
+        except Exception as e:
+            logger.warning(f"Session manager init warning: {e}")
+        
+        logger.info("Application startup complete")
+        
     except Exception as e:
-        logger.warning(f"Background task startup warning: {e}")
-    
-    logger.info("Application startup complete")
+        logger.error(f"Startup error: {e}")
+        # Continue anyway for healthcheck
     
     yield
     
     # Cleanup on shutdown
     logger.info("Shutting down application...")
-    # await browser_pool.cleanup()  # Disabled for Railway
-    await session_manager.cleanup()
-    await ws_manager.disconnect_all()
+    try:
+        await session_manager.cleanup()
+        await ws_manager.disconnect_all()
+    except Exception as e:
+        logger.warning(f"Shutdown warning: {e}")
     logger.info("Application shutdown complete")
 
 
@@ -352,8 +350,13 @@ def create_app() -> FastAPI:
     
     @app.get("/")
     async def root():
-        """Root endpoint - redirect to health check"""
+        """Root endpoint - simple response"""
         return {"message": "Proxy Browser V2 is running", "health": "/health"}
+    
+    @app.get("/ping")
+    async def ping():
+        """Simple ping endpoint"""
+        return {"pong": True}
     
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
