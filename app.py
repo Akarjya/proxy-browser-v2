@@ -253,6 +253,15 @@ async def proxy_page(path: str):
                 content = re.sub(r'href=["\'](https?://[^"\']+)["\']', r'href="/proxy/\1"', content)
                 content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
                 
+                # Server-side location text replacement
+                print("🇺🇸 PROXY: Performing server-side location replacement...")
+                content = re.sub(r'\bIndia\b', 'United States', content)
+                content = re.sub(r'\bBhubaneswar\b', 'New York', content) 
+                content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', content)
+                content = re.sub(r'\ben-GB\b', 'en-US', content)
+                content = re.sub(r'\bUnknown\b', 'New York, NY', content)
+                print("🇺🇸 PROXY: Server-side location replacement completed")
+                
                 # Add comprehensive JavaScript injection for spoofing
                 spoof_script = f"""
                 <script>
@@ -305,6 +314,24 @@ async def proxy_page(path: str):
                     return 300; // EST offset (UTC-5)
                 }};
                 
+                // Override timezone string
+                const originalToString = Date.prototype.toString;
+                Date.prototype.toString = function() {{
+                    const date = originalToString.call(this);
+                    console.log('🇺🇸 PROXY: Spoofing Date.toString timezone');
+                    return date.replace(/GMT[+-]\\d{{4}}.*$/, 'GMT-0500 (Eastern Standard Time)');
+                }};
+                
+                // Override Intl.DateTimeFormat resolvedOptions
+                const originalResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+                Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
+                    const options = originalResolvedOptions.call(this);
+                    console.log('🇺🇸 PROXY: Spoofing DateTimeFormat resolvedOptions');
+                    options.timeZone = 'America/New_York';
+                    options.locale = 'en-US';
+                    return options;
+                }};
+                
                 // Override fetch for IP detection APIs
                 const originalFetch = window.fetch;
                 window.fetch = function(url, options) {{
@@ -314,22 +341,36 @@ async def proxy_page(path: str):
                     // Block or redirect IP detection services
                     if (urlStr.includes('ipapi.co') || urlStr.includes('api.ipify.org') || 
                         urlStr.includes('ipinfo.io') || urlStr.includes('ip-api.com') ||
-                        urlStr.includes('whatismyipaddress.com') || urlStr.includes('myip.com')) {{
-                        console.log('🇺🇸 PROXY: Blocking IP detection API:', urlStr);
+                        urlStr.includes('whatismyipaddress.com') || urlStr.includes('myip.com') ||
+                        urlStr.includes('geoip') || urlStr.includes('location') || urlStr.includes('geolocation')) {{
+                        console.log('🇺🇸 PROXY: Blocking IP/Location detection API:', urlStr);
                         return Promise.resolve(new Response(JSON.stringify({{
                             ip: "172.56.47.191",
                             country: "United States",
-                            country_code: "US",
+                            country_code: "US", 
+                            country_name: "United States",
                             region: "NY",
                             region_name: "New York",
+                            region_code: "NY",
                             city: "New York",
                             zip: "10001",
+                            postal: "10001",
                             lat: 40.7128,
                             lon: -74.0060,
+                            latitude: 40.7128,
+                            longitude: -74.0060,
                             timezone: "America/New_York",
+                            utc_offset: "-05:00",
+                            country_calling_code: "+1",
+                            currency: "USD",
+                            languages: "en-US,en",
                             isp: "Digital Ocean",
-                            org: "Digital Ocean",
-                            as: "AS14061 DigitalOcean, LLC"
+                            org: "Digital Ocean", 
+                            as: "AS14061 DigitalOcean, LLC",
+                            asname: "DIGITALOCEAN-ASN",
+                            mobile: false,
+                            proxy: false,
+                            hosting: true
                         }}), {{
                             headers: {{ 'Content-Type': 'application/json' }}
                         }}));
@@ -407,10 +448,28 @@ async def proxy_page(path: str):
                         const replacements = [];
                         
                         while ((node = walker.nextNode())) {{
-                            if (node && node.textContent && ipRegex.test(node.textContent)) {{
-                                const newText = node.textContent.replace(ipRegex, '172.56.47.191');
-                                if (newText !== node.textContent) {{
-                                    console.log('🇺🇸 PROXY: Replacing IP in DOM:', node.textContent.substring(0, 50), '->', newText.substring(0, 50));
+                            if (node && node.textContent) {{
+                                let newText = node.textContent;
+                                let changed = false;
+                                
+                                // Replace IP addresses
+                                if (ipRegex.test(newText)) {{
+                                    newText = newText.replace(ipRegex, '172.56.47.191');
+                                    changed = true;
+                                }}
+                                
+                                // Replace location text
+                                if (newText.includes('India') || newText.includes('Bhubaneswar') || 
+                                    newText.includes('Asia/Calcutta') || newText.includes('en-GB')) {{
+                                    newText = newText.replace(/India/g, 'United States');
+                                    newText = newText.replace(/Bhubaneswar/g, 'New York');
+                                    newText = newText.replace(/Asia\/Calcutta/g, 'America/New_York');
+                                    newText = newText.replace(/en-GB/g, 'en-US');
+                                    changed = true;
+                                }}
+                                
+                                if (changed && newText !== node.textContent) {{
+                                    console.log('🇺🇸 PROXY: Replacing location in DOM:', node.textContent.substring(0, 50), '->', newText.substring(0, 50));
                                     replacements.push({{node: node, newText: newText}});
                                 }}
                             }}
