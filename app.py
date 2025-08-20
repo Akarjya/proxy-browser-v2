@@ -68,19 +68,39 @@ def ping():
 def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
 
+@app.get("/test-proxy")
+async def test_proxy():
+    try:
+        proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
+        
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            timeout=10.0,
+            verify=False
+        ) as client:
+            response = await client.get("https://httpbin.org/ip")
+            return {"status": "success", "proxy_ip": response.json()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/proxy/{path:path}")
 async def proxy_page(path: str):
+    print(f"Received proxy request for path: {path}")
     try:
         # Construct full URL
         if not path.startswith('http'):
             path = 'https://' + path
+        
+        print(f"Proxying request to: {path}")
+        print(f"Proxy config: {PROXY_CONFIG}")
         
         # Create proxy client
         proxy_url = f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
         
         async with httpx.AsyncClient(
             proxies={"http://": proxy_url, "https://": proxy_url},
-            timeout=30.0
+            timeout=30.0,
+            verify=False
         ) as client:
             # Add spoofed headers
             headers = {
@@ -109,7 +129,28 @@ async def proxy_page(path: str):
             return HTMLResponse(content)
             
     except Exception as e:
-        return HTMLResponse(f"<h1>Error</h1><p>{str(e)}</p>")
+        error_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Proxy Error</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                .error {{ color: red; background: #ffe6e6; padding: 20px; border-radius: 10px; }}
+            </style>
+        </head>
+        <body>
+            <h1>🌐 Proxy Browser V2</h1>
+            <div class="error">
+                <h2>Connection Error</h2>
+                <p><strong>Error:</strong> {str(e)}</p>
+                <p>Please try again or check your proxy settings.</p>
+            </div>
+            <button onclick="window.location.reload()">Try Again</button>
+        </body>
+        </html>
+        """
+        return HTMLResponse(error_html)
 
 
 
