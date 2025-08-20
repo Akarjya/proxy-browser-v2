@@ -143,7 +143,7 @@ async def proxy_page(path: str):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept-Language": PROXY_CONFIG['language'],
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
                 "Sec-Fetch-Dest": "document",
@@ -162,6 +162,20 @@ async def proxy_page(path: str):
             print(f"Response status: {response.status_code}")
             print(f"Response headers: {dict(response.headers)}")
             
+            # Check for unsupported content encoding
+            content_encoding = response.headers.get('content-encoding', '')
+            if 'br' in content_encoding:
+                print(f"Warning: Brotli compression detected - {content_encoding}")
+                # Try again with different headers to avoid Brotli
+                headers.update({
+                    "Accept-Encoding": "gzip, deflate",
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache"
+                })
+                response = await client.get(path, headers=headers)
+                print(f"Retry response status: {response.status_code}")
+                print(f"Retry response headers: {dict(response.headers)}")
+            
             if response.status_code == 403:
                 return HTMLResponse(f"""
                 <!DOCTYPE html>
@@ -177,7 +191,31 @@ async def proxy_page(path: str):
                 </html>
                 """)
             
-            content = response.text
+            # Get content and check if it's readable
+            try:
+                content = response.text
+                # Quick check if content is garbled (contains lots of non-printable chars)
+                if len([c for c in content[:100] if ord(c) > 127]) > 50:
+                    raise UnicodeDecodeError("utf-8", b"", 0, 0, "Garbled content detected")
+            except (UnicodeDecodeError, Exception) as e:
+                print(f"Content decode error: {e}")
+                return HTMLResponse(f"""
+                <!DOCTYPE html>
+                <html>
+                <head><title>Content Encoding Error</title></head>
+                <body>
+                    <div style="position:fixed;top:10px;right:10px;background:green;color:white;padding:10px;border-radius:5px;z-index:9999;">🇺🇸 US Proxy Active - {PROXY_CONFIG["country"]}</div>
+                    <h1>Content Encoding Error</h1>
+                    <p>The website returned compressed content that couldn't be decoded.</p>
+                    <p><strong>URL:</strong> {path}</p>
+                    <p><strong>Status:</strong> {response.status_code}</p>
+                    <p><strong>Content-Encoding:</strong> {response.headers.get('content-encoding', 'none')}</p>
+                    <p>This site may be using Brotli compression which is not supported yet.</p>
+                    <button onclick="window.location.reload()">Try Again</button>
+                    <button onclick="window.location.href='/'">Go Back</button>
+                </body>
+                </html>
+                """)
             
             # Check if it's JSON response (like httpbin)
             if response.headers.get('content-type', '').startswith('application/json'):
