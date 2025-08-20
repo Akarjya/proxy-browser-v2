@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 import httpx
 import json
@@ -100,7 +100,7 @@ async def test_proxy():
         return {"status": "error", "message": str(e)}
 
 @app.get("/proxy/{path:path}")
-async def proxy_page(path: str):
+async def proxy_page(path: str, request: Request):
     print(f"Received proxy request for path: {path}")
     try:
         # Decode URL if needed
@@ -138,9 +138,12 @@ async def proxy_page(path: str):
             timeout=30.0,
             verify=False
         ) as client:
+            # Get original User-Agent from request
+            original_ua = request.headers.get("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            
             # Add spoofed headers
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": original_ua,
                 "Accept-Language": PROXY_CONFIG['language'],
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                 "Accept-Encoding": "gzip, deflate",
@@ -254,13 +257,14 @@ async def proxy_page(path: str):
                 content = re.sub(r'src=["\'](https?://[^"\']+)["\']', r'src="/proxy/\1"', content)
                 
                 # Server-side location text replacement
-                print("🇺🇸 PROXY: Performing server-side location replacement...")
-                content = re.sub(r'\bIndia\b', 'United States', content)
-                content = re.sub(r'\bBhubaneswar\b', 'New York', content) 
-                content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', content)
-                content = re.sub(r'\ben-GB\b', 'en-US', content)
-                content = re.sub(r'\bUnknown\b', 'New York, NY', content)
-                print("🇺🇸 PROXY: Server-side location replacement completed")
+                if any(term in content for term in ['India', 'Bhubaneswar', 'Asia/Calcutta', 'en-GB', 'Unknown']):
+                    print("🇺🇸 PROXY: Performing server-side location replacement...")
+                    content = re.sub(r'\bIndia\b', 'United States', content)
+                    content = re.sub(r'\bBhubaneswar\b', 'New York', content) 
+                    content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', content)
+                    content = re.sub(r'\ben-GB\b', 'en-US', content)
+                    content = re.sub(r'\bUnknown\b', 'New York, NY', content)
+                    print("🇺🇸 PROXY: Server-side location replacement completed")
                 
                 # Add comprehensive JavaScript injection for spoofing
                 spoof_script = f"""
@@ -336,7 +340,10 @@ async def proxy_page(path: str):
                 const originalFetch = window.fetch;
                 window.fetch = function(url, options) {{
                     const urlStr = url.toString();
-                    console.log('🇺🇸 PROXY: Intercepting fetch:', urlStr);
+                    // Only log important intercepts, not every fetch
+                    if (urlStr.includes('wp-json') || urlStr.includes('ipapi') || urlStr.includes('analytics')) {{
+                        console.log('🇺🇸 PROXY: Intercepting fetch:', urlStr);
+                    }}
                     
                     // Block or redirect IP detection services
                     if (urlStr.includes('ipapi.co') || urlStr.includes('api.ipify.org') || 
@@ -376,11 +383,13 @@ async def proxy_page(path: str):
                         }}));
                     }}
                     
-                    // Allow Google Analytics through with US headers
+                    // Allow Google Analytics and AdSense through with US headers
                     if (urlStr.includes('google-analytics.com') || urlStr.includes('googletagmanager.com') ||
                         urlStr.includes('analytics.google.com') || urlStr.includes('/gtag/') || 
-                        urlStr.includes('/collect') || urlStr.includes('measurement_id')) {{
-                        console.log('🇺🇸 PROXY: Allowing GA4 with US headers:', urlStr);
+                        urlStr.includes('/collect') || urlStr.includes('measurement_id') ||
+                        urlStr.includes('googlesyndication.com') || urlStr.includes('doubleclick.net') ||
+                        urlStr.includes('adnxs.com') || urlStr.includes('adsystem.com')) {{
+                        console.log('🇺🇸 PROXY: Allowing Analytics/AdSense with US headers');
                         const newOptions = {{ ...options }};
                         newOptions.headers = {{
                             ...newOptions.headers,
@@ -390,7 +399,8 @@ async def proxy_page(path: str):
                             'X-Forwarded-Proto': 'https',
                             'X-Appengine-Country': 'US',
                             'X-Appengine-Region': 'ny',
-                            'X-Appengine-City': 'newyork'
+                            'X-Appengine-City': 'newyork',
+                            'Accept-Language': 'en-US,en;q=0.9'
                         }};
                         return originalFetch.call(this, url, newOptions);
                     }}
