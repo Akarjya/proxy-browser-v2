@@ -114,24 +114,38 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     parsed_base = urlparse(base_url)
     domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
     
-    # Rewrite absolute URLs
+    # CroxyProxy-style URL rewriting (same domain approach)
+    import base64
+    
+    # Rewrite absolute URLs with Base64 encoding
+    def encode_url(match):
+        attr, quote, url = match.groups()
+        if url.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+            return match.group(0)
+        
+        # Encode URL like CroxyProxy
+        if url.startswith('http'):
+            encoded = base64.b64encode(url.encode()).decode()
+            return f'{attr}={quote}/?url={encoded}{quote}'
+        return match.group(0)
+    
     content = re.sub(
-        r'(href|src|action)=(["\'])https?://([^"\']+)\2',
-        rf'\1=\2{proxy_base}/\3\2',
+        r'(href|src|action)=(["\'])(https?://[^"\']+)\2',
+        encode_url,
         content
     )
     
     # Rewrite protocol-relative URLs
     content = re.sub(
         r'(href|src|action)=(["\'])//([^"\']+)\2',
-        rf'\1=\2{proxy_base}/https://\3\2',
+        lambda m: f'{m.group(1)}={m.group(2)}/?url={base64.b64encode(f"https://{m.group(3)}".encode()).decode()}{m.group(2)}',
         content
     )
     
-    # Rewrite relative URLs
+    # Rewrite relative URLs to stay on same domain
     content = re.sub(
-        r'(href|src|action)=(["\'])(?!http|//|#|mailto:|tel:|javascript:)([^"\']+)\2',
-        rf'\1=\2{proxy_base}/{domain}/\3\2',
+        r'(href|src|action)=(["\'])(?!http|//|#|mailto:|tel:|javascript:|/\?)([^"\']+)\2',
+        lambda m: f'{m.group(1)}={m.group(2)}/?url={base64.b64encode(f"{domain}/{m.group(3)}".encode()).decode()}{m.group(2)}',
         content
     )
     
@@ -498,7 +512,17 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     return content
 
 @app.get("/")
-async def root():
+async def root(url: str = None):
+    """CroxyProxy-style root with Base64 encoded URL"""
+    if url:
+        # Decode Base64 URL like CroxyProxy
+        try:
+            import base64
+            decoded_url = base64.b64decode(url).decode('utf-8')
+            return RedirectResponse(url=f"/proxy/{decoded_url}")
+        except:
+            pass
+    
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
@@ -544,15 +568,15 @@ async def root():
         <div class="container">
             <h1>🌐 Proxy Browser V2</h1>
             <p>Browse with US IP address and location</p>
-            <button class="btn" onclick="window.location.href='/proxy/https://example.com/'">
+            <button class="btn" onclick="window.location.href='/?url=aHR0cHM6Ly9leGFtcGxlLmNvbQ=='">
                 Test Example.com
             </button>
             <br><br>
-            <button class="btn" onclick="window.location.href='/proxy/https://httpbin.org/ip'">
+            <button class="btn" onclick="window.location.href='/?url=aHR0cHM6Ly9odHRwYmluLm9yZy9pcA=='">
                 Test IP Detection
             </button>
             <br><br>
-            <button class="btn" onclick="window.location.href='/proxy/https://ybsq.xyz/'">
+            <button class="btn" onclick="window.location.href='/?url=aHR0cHM6Ly95YnNxLnh5eg=='">
                 Your Site (ybsq.xyz)
             </button>
         </div>
