@@ -1295,85 +1295,20 @@ async def proxy_page(path: str, request: Request):
                     else:
                         html_content = f'<html><head>{ip_blocking_script}</head><body>{html_content}</body></html>'
                     
-                    # Simple URL rewriting for CSS/JS resources (NOT Base64 encoding)
+                    # SIMPLE, CLEAN URL rewriting - Fix broken URLs
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
                     
-                    # COMPLETE CROXYPROXY URL REWRITING - Every URL goes through our domain
-                    def complete_url_rewriting(content, base_url, proxy_domain):
-                        """Rewrite ALL URLs to go through our proxy domain like CroxyProxy"""
-                        
-                        def url_replacer(match):
-                            attr = match.group(1)
-                            quote = match.group(2) 
-                            url = match.group(3)
-                            
-                            # Skip data URLs, javascript, mailto, fragments
-                            if url.startswith(('data:', 'javascript:', 'mailto:', '#', 'blob:')):
-                                return match.group(0)
-                            
-                            # Convert to absolute URL
-                            if url.startswith('//'):
-                                full_url = f"https:{url}"
-                            elif url.startswith('/'):
-                                parsed_base = urlparse(base_url)
-                                full_url = f"{parsed_base.scheme}://{parsed_base.netloc}{url}"
-                            elif url.startswith('http'):
-                                full_url = url
-                            else:
-                                full_url = urljoin(base_url, url)
-                            
-                            # CroxyProxy style: ALL URLs through our domain
-                            return f'{attr}={quote}{proxy_domain}/proxy/{full_url}{quote}'
-                        
-                        # Replace ALL URL attributes
+                    # Simple relative URL fixing only
+                    def fix_relative_urls(content, base_url):
+                        # Only fix relative URLs that start with /
                         content = re.sub(
-                            r'(href|src|action|data-src|data-href|srcset)=(["\'])([^"\']+)\2',
-                            url_replacer,
+                            r'(href|src|action)=(["\'])(/[^"\']*)\2',
+                            lambda m: f'{m.group(1)}={m.group(2)}{proxy_base}/{urljoin(base_url, m.group(3))}{m.group(2)}',
                             content
                         )
-                        
-                        # Replace CSS @import and url() references
-                        content = re.sub(
-                            r'@import\s+url\(["\']?([^"\'\\)]+)["\']?\)',
-                            rf'@import url("{proxy_domain}/proxy/\\1")',
-                            content
-                        )
-                        
-                        content = re.sub(
-                            r'url\(["\']?([^"\'\\)]+)["\']?\)',
-                            rf'url("{proxy_domain}/proxy/\\1")',
-                            content
-                        )
-                        
-                        # Replace JavaScript URL references  
-                        content = re.sub(
-                            r'(["\'])(https?://[^"\']+)(["\'])',
-                            rf'\\1{proxy_domain}/proxy/\\2\\3',
-                            content
-                        )
-                        
-                        # CRITICAL: Force AdSense requests through our proxy
-                        adsense_domains = [
-                            'googlesyndication.com',
-                            'googleadservices.com', 
-                            'googletagmanager.com',
-                            'google-analytics.com',
-                            'doubleclick.net',
-                            'adsystem.com'
-                        ]
-                        
-                        for domain in adsense_domains:
-                            # Replace any direct references to AdSense domains
-                            content = re.sub(
-                                rf'https?://(www\.)?{domain.replace(".", "\\.")}',
-                                rf'{proxy_domain}/proxy/https://\\1{domain}',
-                                content
-                            )
-                        
                         return content
                     
-                    proxy_domain = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}"
-                    processed_content = complete_url_rewriting(html_content, path, proxy_domain)
+                    processed_content = fix_relative_urls(html_content, path)
                     
                     return HTMLResponse(
                         content=processed_content,
