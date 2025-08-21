@@ -13,7 +13,7 @@ services:
       - key: PROXY_SERVER
         value: pg.proxi.es:20000
       - key: PROXY_USERNAME
-        value: KMwYgm4pR4upF6yX
+        value: KMwYgm4pR4upF6yX-s-session123-co-US-st-NY-ci-NewYork
       - key: PROXY_PASSWORD
         value: pMBwu34BjjGr5urD
       - key: PROXY_COUNTRY

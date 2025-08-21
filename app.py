@@ -16,7 +16,7 @@ app = FastAPI(title="Proxy Browser V2 - CroxyProxy Style")
 # Proxy configuration
 PROXY_CONFIG = {
     "server": os.environ.get("PROXY_SERVER", "pg.proxi.es:20000"),
-    "username": os.environ.get("PROXY_USERNAME", "KMwYgm4pR4upF6yX"),
+    "username": os.environ.get("PROXY_USERNAME", "KMwYgm4pR4upF6yX-s-session123-co-US-st-NY-ci-NewYork"),  # Force US location
     "password": os.environ.get("PROXY_PASSWORD", "pMBwu34BjjGr5urD"),
     "country": os.environ.get("PROXY_COUNTRY", "USA"),
     "timezone": os.environ.get("SPOOF_TIMEZONE", "America/New_York"),
@@ -65,10 +65,10 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
     # Get actual proxy IP dynamically
     proxy_ip = await get_actual_proxy_ip()
     
-    # CRITICAL: Don't preserve original headers that leak Render.com location
-    # Only preserve User-Agent and Accept headers
-    headers["User-Agent"] = original_request.headers.get("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-    headers["Accept"] = original_request.headers.get("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+    # Preserve original headers but modify location-related ones
+    for name, value in original_request.headers.items():
+        if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding']:
+            headers[name] = value
     
     # Override location-related headers with US data using dynamic proxy IP
     headers.update({
@@ -100,17 +100,9 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
         "X-ISP": "DigitalOcean, LLC",
         "X-ASN": "AS14061",
         "X-Organization": "DigitalOcean, LLC",
-        "X-Originating-IP": proxy_ip,
-        "X-Source-IP": proxy_ip,
-        "X-Coming-From": "US",
-        "X-GeoIP-Country": "US",
-        "X-GeoIP-Region": "NY",
-        "X-GeoIP-City": "New York",
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Referer": f"https://{urlparse(target_url).netloc}/",
-        "Origin": f"https://{urlparse(target_url).netloc}"
+        "Pragma": "no-cache"
     })
     
     return headers
@@ -669,13 +661,46 @@ async def proxy_page(path: str, request: Request):
                     # Server-side IP replacement (aggressive) with dynamic proxy IP
                     current_proxy_ip = await get_actual_proxy_ip()
                     print(f"🔧 Performing server-side IP replacement with {current_proxy_ip}...")
+                    
                     # Replace various IP patterns
                     html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', current_proxy_ip, html_content)
                     html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', current_proxy_ip, html_content)  # IPv6
+                    
+                    # Location replacement
                     html_content = re.sub(r'\bIndia\b', 'United States', html_content)
                     html_content = re.sub(r'\bBhubaneswar\b', 'New York', html_content)
+                    html_content = re.sub(r'\bOdisha\b', 'New York', html_content)
+                    html_content = re.sub(r'\bKhordha\b', 'New York', html_content)
                     html_content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', html_content)
                     html_content = re.sub(r'\ben-GB\b', 'en-US', html_content)
+                    
+                    # ISP replacement
+                    html_content = re.sub(r'\bBharti Airtel\b', 'DigitalOcean LLC', html_content)
+                    html_content = re.sub(r'\bBharti Airtel Limited\b', 'DigitalOcean, LLC', html_content)
+                    html_content = re.sub(r'\bAS45609\b', 'AS14061', html_content)
+                    
+                    # Add JavaScript to override any remaining detection
+                    isp_override = f'''
+                    <script>
+                    // Override ISP detection
+                    Object.defineProperty(window, 'userISP', {{value: 'DigitalOcean, LLC', writable: false}});
+                    Object.defineProperty(window, 'userOrganization', {{value: 'DigitalOcean, LLC', writable: false}});
+                    Object.defineProperty(window, 'userASN', {{value: 'AS14061', writable: false}});
+                    Object.defineProperty(window, 'userCountryCode', {{value: 'US', writable: false}});
+                    Object.defineProperty(window, 'userRegionCode', {{value: 'NY', writable: false}});
+                    
+                    // Override any ISP detection functions
+                    if (window.getISP) window.getISP = () => 'DigitalOcean, LLC';
+                    if (window.getOrganization) window.getOrganization = () => 'DigitalOcean, LLC';
+                    if (window.getASN) window.getASN = () => 'AS14061';
+                    
+                    console.log('🇺🇸 ISP: Forced DigitalOcean ISP data');
+                    </script>
+                    '''
+                    
+                    # Inject ISP override early
+                    if '<head>' in html_content:
+                        html_content = html_content.replace('<head>', f'<head>{isp_override}')
                     
                     # Inject GA4 location override before any GA4 scripts
                     ga4_override = '''
@@ -701,29 +726,15 @@ async def proxy_page(path: str, request: Request):
                     };
                     
                     // Set global location data for GA4
-                    // Set global location data for GA4 with dynamic IP
                     gtag('config', 'G-BX28RFEZ30', {
                         country: 'US',
                         region: 'NY',
                         city: 'New York',
-                        user_ip: '{proxy_ip}',
                         custom_map: {
                             country: 'US',
                             region: 'NY',
-                            city: 'New York',
-                            user_ip: '{proxy_ip}'
-                        },
-                        send_page_view: false
-                    });
-                    
-                    // Send pageview with forced IP
-                    gtag('event', 'page_view', {
-                        page_title: document.title,
-                        page_location: window.location.href,
-                        user_ip: '{proxy_ip}',
-                        country: 'US',
-                        region: 'NY',
-                        city: 'New York'
+                            city: 'New York'
+                        }
                     });
                     </script>
                     '''
