@@ -519,8 +519,84 @@ async def root(url: str = None):
         try:
             import base64
             decoded_url = base64.b64decode(url).decode('utf-8')
-            return RedirectResponse(url=f"/proxy/{decoded_url}")
-        except:
+            
+            # Show CroxyProxy-style loading page first
+            loading_html = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Connecting to Proxy...</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        margin: 0;
+                        padding: 0;
+                        height: 100vh;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                    }}
+                    .loader {{
+                        background: rgba(255, 255, 255, 0.1);
+                        padding: 60px;
+                        border-radius: 20px;
+                        backdrop-filter: blur(10px);
+                        max-width: 500px;
+                    }}
+                    .spinner {{
+                        border: 4px solid rgba(255, 255, 255, 0.3);
+                        border-top: 4px solid white;
+                        border-radius: 50%;
+                        width: 60px;
+                        height: 60px;
+                        animation: spin 1s linear infinite;
+                        margin: 0 auto 20px;
+                    }}
+                    @keyframes spin {{
+                        0% {{ transform: rotate(0deg); }}
+                        100% {{ transform: rotate(360deg); }}
+                    }}
+                    h2 {{ margin: 20px 0; font-size: 1.8em; }}
+                    .status {{ font-size: 14px; opacity: 0.8; margin: 10px 0; }}
+                    .target {{ 
+                        background: rgba(255, 255, 255, 0.2);
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        margin: 20px 0;
+                        word-break: break-all;
+                        font-size: 12px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="loader">
+                    <div class="spinner"></div>
+                    <h2>🌐 Connecting to Proxy...</h2>
+                    <div class="status">🔒 Applying US location spoofing</div>
+                    <div class="status">🎯 Initializing AdSense domain fix</div>
+                    <div class="status">📊 Setting up GA4 parameter override</div>
+                    <div class="target">Target: {decoded_url}</div>
+                    <div class="status">⏳ Please wait...</div>
+                </div>
+                
+                <script>
+                    // Redirect after 2.5 seconds (CroxyProxy style)
+                    setTimeout(function() {{
+                        window.location.href = '/proxy/{decoded_url.replace(':', '%3A').replace('/', '%2F')}';
+                    }}, 2500);
+                </script>
+            </body>
+            </html>
+            """
+            return HTMLResponse(content=loading_html)
+            
+        except Exception as e:
+            print(f"❌ DECODE ERROR: {e}")
             pass
     
     return HTMLResponse("""
@@ -657,19 +733,41 @@ async def ga4_collect_override(request: Request):
     # Get original parameters
     params = dict(request.query_params)
     
-    # CRITICAL: Fix dl parameter to show original domain instead of proxy domain
-    if 'dl' in params and 'scrap.ybsq.xyz/proxy/' in params['dl']:
-        original_url = params['dl']
-        # Extract target domain and path from proxy URL
-        if '/proxy/https://' in original_url:
-            # Convert: https://scrap.ybsq.xyz/proxy/https://ybsq.xyz/path
-            # To: https://ybsq.xyz/path
-            target_part = original_url.split('/proxy/https://')[1]
+    # CRITICAL: Always fix dl and dr parameters for ANY domain
+    original_dl = params.get('dl', '')
+    original_dr = params.get('dr', '')
+    
+    # Fix dl (document location) parameter
+    if 'scrap.ybsq.xyz/proxy/' in original_dl:
+        if '/proxy/https://' in original_dl:
+            target_part = original_dl.split('/proxy/https://')[1]
             params['dl'] = f'https://{target_part}'
-        elif '/proxy/http://' in original_url:
-            target_part = original_url.split('/proxy/http://')[1]
+        elif '/proxy/http://' in original_dl:
+            target_part = original_dl.split('/proxy/http://')[1] 
             params['dl'] = f'http://{target_part}'
-        print(f"🚨 GA4: Fixed dl parameter from {original_url} to {params['dl']}")
+        print(f"🚨 GA4 DL: Fixed from {original_dl} to {params['dl']}")
+    
+    # Fix dr (document referrer) parameter
+    if 'scrap.ybsq.xyz/proxy/' in original_dr:
+        if '/proxy/https://' in original_dr:
+            target_part = original_dr.split('/proxy/https://')[1]
+            params['dr'] = f'https://{target_part}'
+        elif '/proxy/http://' in original_dr:
+            target_part = original_dr.split('/proxy/http://')[1]
+            params['dr'] = f'http://{target_part}'
+        print(f"🚨 GA4 DR: Fixed from {original_dr} to {params['dr']}")
+    
+    # Ensure dl and dr match target domain
+    if 'dl' in params and params['dl']:
+        try:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(params['dl'])
+            if parsed_url.hostname:
+                # Force dr to match dl domain
+                params['dr'] = f"{parsed_url.scheme}://{parsed_url.hostname}/"
+                print(f"🎯 GA4: Synchronized dr to match dl domain: {params['dr']}")
+        except:
+            pass
     
     # Force US location in GA4 parameters
     params.update({
@@ -679,7 +777,7 @@ async def ga4_collect_override(request: Request):
         'cn': 'United States',  # Country name
         'cs': 'DigitalOcean',   # Campaign source (ISP)
         'cm': 'organic',        # Campaign medium
-        'dr': params.get('dl', '').split('?')[0] if 'dl' in params else 'https://example.com',  # Document referrer matches dl domain
+        # dr is already set above to match dl domain
     })
     
     # Forward to real GA4 through proxy with US IP
