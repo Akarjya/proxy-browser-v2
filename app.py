@@ -141,29 +141,35 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     // CroxyProxy-style spoofing
     console.log('🇺🇸 CROXYPROXY: Initializing location spoofing...');
     
-    // Block WebRTC to prevent IP leaks
-    if (window.RTCPeerConnection) {{
-        const originalRTC = window.RTCPeerConnection;
-        window.RTCPeerConnection = function(config) {{
-            console.log('🇺🇸 CROXYPROXY: Blocking WebRTC');
-            // Return dummy connection that doesn't leak IP
-            return {{
-                createDataChannel: () => ({{}}),
-                createOffer: () => Promise.resolve({{}}),
-                createAnswer: () => Promise.resolve({{}}),
-                setLocalDescription: () => Promise.resolve(),
-                setRemoteDescription: () => Promise.resolve(),
-                addIceCandidate: () => Promise.resolve(),
-                close: () => {{}},
-                addEventListener: () => {{}},
-                removeEventListener: () => {{}}
-            }};
+    // Block WebRTC completely to prevent IP leaks
+    console.log('🇺🇸 CROXYPROXY: Disabling WebRTC completely');
+    
+    // Disable RTCPeerConnection
+    delete window.RTCPeerConnection;
+    delete window.webkitRTCPeerConnection;
+    delete window.mozRTCPeerConnection;
+    
+    // Override with null functions
+    window.RTCPeerConnection = function() {{
+        console.log('🚫 WEBRTC: Blocked RTCPeerConnection creation');
+        throw new Error('WebRTC is disabled for privacy');
+    }};
+    
+    window.webkitRTCPeerConnection = window.RTCPeerConnection;
+    window.mozRTCPeerConnection = window.RTCPeerConnection;
+    
+    // Block getUserMedia as well
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+        navigator.mediaDevices.getUserMedia = function() {{
+            console.log('🚫 WEBRTC: Blocked getUserMedia');
+            return Promise.reject(new Error('getUserMedia is disabled for privacy'));
         }};
-        
-        // Also block webkitRTCPeerConnection
-        if (window.webkitRTCPeerConnection) {{
-            window.webkitRTCPeerConnection = window.RTCPeerConnection;
-        }}
+    }}
+    
+    if (navigator.getUserMedia) {{
+        navigator.getUserMedia = function() {{
+            console.log('🚫 WEBRTC: Blocked getUserMedia (legacy)');
+        }};
     }}
     
     // Override geolocation
@@ -193,16 +199,48 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
         }};
     }}
     
-    // Override timezone
+    // Override timezone (comprehensive)
     Date.prototype.getTimezoneOffset = function() {{
-        return 300; // EST
+        console.log('🇺🇸 CROXYPROXY: Spoofing timezone offset');
+        return 300; // EST (-5 UTC)
     }};
     
-    // Override Intl
+    // Override Date toString to show EST
+    const originalToString = Date.prototype.toString;
+    Date.prototype.toString = function() {{
+        const date = originalToString.call(this);
+        return date.replace(/GMT[+-]\\d{{4}}.*$/, 'GMT-0500 (Eastern Standard Time)');
+    }};
+    
+    // Override Intl DateTimeFormat
     const originalDateTimeFormat = Intl.DateTimeFormat;
     Intl.DateTimeFormat = function(locale, options) {{
+        console.log('🇺🇸 CROXYPROXY: Spoofing DateTimeFormat');
         return new originalDateTimeFormat('en-US', {{...options, timeZone: 'America/New_York'}});
     }};
+    
+    // Override Intl.DateTimeFormat.prototype.resolvedOptions
+    const originalResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+    Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
+        const options = originalResolvedOptions.call(this);
+        options.timeZone = 'America/New_York';
+        options.locale = 'en-US';
+        return options;
+    }};
+    
+    // Override timezone detection methods
+    if (window.Intl && window.Intl.DateTimeFormat) {{
+        Object.defineProperty(window.Intl.DateTimeFormat.prototype, 'resolvedOptions', {{
+            value: function() {{
+                return {{
+                    locale: 'en-US',
+                    timeZone: 'America/New_York',
+                    calendar: 'gregory',
+                    numberingSystem: 'latn'
+                }};
+            }}
+        }});
+    }}
     
     // Override navigator properties
     Object.defineProperty(navigator, 'language', {{
@@ -776,6 +814,41 @@ async def proxy_page(path: str, request: Request):
                     # Inject ISP override early
                     if '<head>' in html_content:
                         html_content = html_content.replace('<head>', f'<head>{isp_override}')
+                    
+                    # Inject AdSense domain fix
+                    adsense_fix = f'''
+                    <script>
+                    // AdSense Domain Fix - Make it think we're on original domain
+                    Object.defineProperty(document, 'domain', {{
+                        get: function() {{ return 'ybsq.xyz'; }},
+                        set: function() {{ /* ignore */ }}
+                    }});
+                    
+                    Object.defineProperty(window.location, 'hostname', {{
+                        get: function() {{ return 'ybsq.xyz'; }}
+                    }});
+                    
+                    Object.defineProperty(window.location, 'host', {{
+                        get: function() {{ return 'ybsq.xyz'; }}
+                    }});
+                    
+                    Object.defineProperty(window.location, 'origin', {{
+                        get: function() {{ return 'https://ybsq.xyz'; }}
+                    }});
+                    
+                    // Override document.referrer for AdSense
+                    Object.defineProperty(document, 'referrer', {{
+                        get: function() {{ return 'https://ybsq.xyz/'; }}
+                    }});
+                    
+                    console.log('📢 ADSENSE: Domain spoofed to ybsq.xyz');
+                    </script>
+                    '''
+                    
+                    # Inject AdSense fix early
+                    if 'googlesyndication.com' in html_content or 'adsbygoogle' in html_content:
+                        html_content = html_content.replace('<head>', f'<head>{adsense_fix}')
+                        print("📢 ADSENSE: Injected domain fix for AdSense")
                     
                     # Inject GA4 location override before any GA4 scripts
                     ga4_override = '''
