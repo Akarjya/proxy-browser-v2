@@ -67,8 +67,11 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
     
     # Preserve original headers but modify location-related ones
     for name, value in original_request.headers.items():
-        if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding']:
+        if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding', 'user-agent']:
             headers[name] = value
+    
+    # CRITICAL: Force US User-Agent for better ad targeting
+    headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     
     # Override location-related headers with US data using dynamic proxy IP
     headers.update({
