@@ -587,7 +587,7 @@ async def root(url: str = None):
                 <script>
                     // Redirect after 2.5 seconds (CroxyProxy style)
                     setTimeout(function() {{
-                        window.location.href = '/proxy/{decoded_url.replace(':', '%3A').replace('/', '%2F')}';
+                        window.location.href = '/proxy/{decoded_url}';
                     }}, 2500);
                 </script>
             </body>
@@ -1109,11 +1109,22 @@ async def proxy_page(path: str, request: Request):
                     
                     print("✅ Server-side IP replacement completed")
                     
-                    # Rewrite content like CroxyProxy
-                    proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
-                    processed_content = rewrite_html_content(html_content, path, proxy_base, current_proxy_ip)
+                    # Simple URL rewriting for CSS/JS resources (NOT Base64 encoding)
+                    import re
+                    from urllib.parse import urljoin, urlparse
                     
-                    # Template replacement already done in rewrite_html_content function
+                    # Fix relative URLs to absolute proxy URLs
+                    def fix_relative_urls(content, base_url, proxy_base):
+                        # Replace relative URLs with proxy URLs
+                        content = re.sub(
+                            r'(href|src|action)=(["\'])(?!https?://|data:|javascript:|mailto:)([^"\']+)\2',
+                            lambda m: f'{m.group(1)}={m.group(2)}{proxy_base}/{urljoin(base_url, m.group(3))}{m.group(2)}',
+                            content
+                        )
+                        return content
+                    
+                    proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
+                    processed_content = fix_relative_urls(html_content, path, proxy_base)
                     
                     return HTMLResponse(
                         content=processed_content,
