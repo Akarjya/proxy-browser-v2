@@ -257,13 +257,21 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
             }}));
         }}
         
-        // Add US headers to all analytics requests
+        // Redirect GA4 collect requests to our custom endpoint
+        if (urlStr.includes('google-analytics.com/g/collect') || 
+            urlStr.includes('google-analytics.com/collect')) {{
+            console.log('🎯 GA4: Redirecting collect to custom endpoint');
+            const newUrl = window.location.origin + '/g/collect?' + urlStr.split('?')[1];
+            return originalFetch.call(this, newUrl, options);
+        }}
+        
+        // Add US headers to all other analytics requests
         if (urlStr.includes('google') || urlStr.includes('analytics') || urlStr.includes('adsense')) {{
             console.log('🇺🇸 CROXYPROXY: Adding US headers to analytics');
             options.headers = {{
                 ...options.headers,
                 'CF-IPCountry': 'US',
-                'X-Forwarded-For': '172.56.47.191',
+                'X-Forwarded-For': '{proxy_ip}',
                 'Accept-Language': 'en-US,en;q=0.9'
             }};
         }}
@@ -575,6 +583,73 @@ async def handle_ipx(path: str):
     return Response(
         content=b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82',
         media_type="image/png"
+    )
+
+@app.get("/g/collect")
+@app.post("/g/collect")
+async def ga4_collect_override(request: Request):
+    """Override GA4 collect endpoint to force US location"""
+    proxy_ip = await get_actual_proxy_ip()
+    print(f"🎯 GA4 COLLECT: Intercepting with proxy IP {proxy_ip}")
+    
+    # Get original parameters
+    params = dict(request.query_params)
+    
+    # Force US location in GA4 parameters
+    params.update({
+        'uip': proxy_ip,  # User IP override
+        'geoid': '21167',  # New York geo ID
+        'ul': 'en-us',     # User language
+        'cn': 'United States',  # Country name
+        'cs': 'DigitalOcean',   # Campaign source (ISP)
+        'cm': 'organic',        # Campaign medium
+        'dr': f'https://{request.headers.get("host", "scrap.ybsq.xyz")}',  # Document referrer
+    })
+    
+    # Forward to real GA4 through proxy with US IP
+    try:
+        proxy_url = get_proxy_url()
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            timeout=10.0,
+            verify=False
+        ) as client:
+            # Forward to real GA4 collect endpoint
+            ga4_url = "https://www.google-analytics.com/g/collect"
+            
+            # Add US headers
+            headers = {
+                "User-Agent": request.headers.get("User-Agent", ""),
+                "CF-IPCountry": "US",
+                "X-Forwarded-For": proxy_ip,
+                "X-Real-IP": proxy_ip,
+                "Accept-Language": "en-US,en;q=0.9",
+                "X-Appengine-Country": "US",
+                "X-Appengine-Region": "ny",
+                "X-Appengine-City": "newyork"
+            }
+            
+            # Send to GA4 through proxy
+            if request.method == "GET":
+                response = await client.get(ga4_url, params=params, headers=headers)
+            else:
+                response = await client.post(ga4_url, params=params, headers=headers)
+            
+            print(f"🎯 GA4: Forwarded to real GA4 - Status: {response.status_code}")
+            
+            return Response(
+                content=response.content,
+                media_type="image/gif",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            )
+    except Exception as e:
+        print(f"❌ GA4 forward error: {e}")
+        
+    # Fallback success pixel
+    return Response(
+        content=b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x04\x01\x00;',
+        media_type="image/gif",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
 @app.get("/proxy/{path:path}")
