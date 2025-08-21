@@ -842,28 +842,73 @@ async def proxy_page(path: str, request: Request):
                     # Inject AdSense domain fix
                     adsense_fix = f'''
                     <script>
-                    // AdSense Domain Fix - Make it think we're on original domain
+                    // Complete Domain Spoofing - Make everything think we're on ybsq.xyz
+                    const originalDomain = 'ybsq.xyz';
+                    const originalOrigin = 'https://ybsq.xyz';
+                    
+                    // Override document properties
                     Object.defineProperty(document, 'domain', {{
-                        get: function() {{ return 'ybsq.xyz'; }},
+                        get: function() {{ 
+                            console.log('📢 ADSENSE: Spoofed document.domain to ybsq.xyz');
+                            return originalDomain; 
+                        }},
                         set: function() {{ /* ignore */ }}
                     }});
                     
+                    Object.defineProperty(document, 'URL', {{
+                        get: function() {{ 
+                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                        }}
+                    }});
+                    
+                    Object.defineProperty(document, 'documentURI', {{
+                        get: function() {{ 
+                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                        }}
+                    }});
+                    
+                    // Override window.location properties
                     Object.defineProperty(window.location, 'hostname', {{
-                        get: function() {{ return 'ybsq.xyz'; }}
+                        get: function() {{ 
+                            console.log('📢 ADSENSE: Spoofed location.hostname to ybsq.xyz');
+                            return originalDomain; 
+                        }}
                     }});
                     
                     Object.defineProperty(window.location, 'host', {{
-                        get: function() {{ return 'ybsq.xyz'; }}
+                        get: function() {{ return originalDomain; }}
                     }});
                     
                     Object.defineProperty(window.location, 'origin', {{
-                        get: function() {{ return 'https://ybsq.xyz'; }}
+                        get: function() {{ 
+                            console.log('📢 ADSENSE: Spoofed location.origin to https://ybsq.xyz');
+                            return originalOrigin; 
+                        }}
+                    }});
+                    
+                    Object.defineProperty(window.location, 'href', {{
+                        get: function() {{ 
+                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                        }}
                     }});
                     
                     // Override document.referrer for AdSense
                     Object.defineProperty(document, 'referrer', {{
-                        get: function() {{ return 'https://ybsq.xyz/'; }}
+                        get: function() {{ 
+                            console.log('📢 ADSENSE: Spoofed document.referrer to ybsq.xyz');
+                            return originalOrigin + '/'; 
+                        }}
                     }});
+                    
+                    // Override top.location for iframe ads
+                    try {{
+                        Object.defineProperty(top.location, 'hostname', {{
+                            get: function() {{ return originalDomain; }}
+                        }});
+                        Object.defineProperty(top.location, 'origin', {{
+                            get: function() {{ return originalOrigin; }}
+                        }});
+                    }} catch(e) {{ /* ignore cross-origin */ }}
                     
                     console.log('📢 ADSENSE: Domain spoofed to ybsq.xyz');
                     </script>
