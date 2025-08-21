@@ -1037,6 +1037,186 @@ async def proxy_page(path: str, request: Request):
                     
                     print("✅ Server-side IP replacement completed")
                     
+                    # MASSIVE CLIENT-SIDE IP BLOCKING - CroxyProxy Level
+                    ip_blocking_script = f'''
+                    <script>
+                    // COMPLETE IP DETECTION BLOCKING - CroxyProxy Level
+                    console.log('🚫 CROXYPROXY: BLOCKING ALL IP DETECTION');
+                    
+                    (function() {{
+                        'use strict';
+                        
+                        const SPOOF_IP = "{current_proxy_ip}";
+                        const SPOOF_DATA = {{
+                            ip: SPOOF_IP,
+                            country: "United States", 
+                            countryCode: "US",
+                            region: "NY",
+                            regionName: "New York",
+                            city: "New York",
+                            timezone: "America/New_York",
+                            lat: 40.7128,
+                            lon: -74.0060,
+                            isp: "DigitalOcean, LLC",
+                            org: "DigitalOcean, LLC",
+                            as: "AS14061"
+                        }};
+                        
+                        // 1. BLOCK WEBRTC COMPLETELY
+                        delete window.RTCPeerConnection;
+                        delete window.webkitRTCPeerConnection;
+                        delete window.mozRTCPeerConnection;
+                        
+                        // 2. OVERRIDE FETCH FOR ALL IP APIs
+                        const originalFetch = window.fetch;
+                        window.fetch = function(url, options) {{
+                            const urlStr = url.toString().toLowerCase();
+                            
+                            const ipApiPatterns = [
+                                'ipapi', 'ipify', 'ipinfo', 'whatismyip', 'geoip', 'iplocation',
+                                'ip-api', 'freegeoip', 'whoer.com', 'httpbin.org/ip', 'icanhazip.com'
+                            ];
+                            
+                            if (ipApiPatterns.some(pattern => urlStr.includes(pattern))) {{
+                                console.log('🚫 BLOCKED IP API:', urlStr);
+                                return Promise.resolve(new Response(JSON.stringify(SPOOF_DATA), {{
+                                    status: 200,
+                                    headers: {{ 'Content-Type': 'application/json' }}
+                                }}));
+                            }}
+                            
+                            return originalFetch.call(this, url, options);
+                        }};
+                        
+                        // 3. OVERRIDE XHR FOR IP DETECTION
+                        const OriginalXHR = window.XMLHttpRequest;
+                        window.XMLHttpRequest = function() {{
+                            const xhr = new OriginalXHR();
+                            const originalOpen = xhr.open;
+                            const originalSend = xhr.send;
+                            
+                            xhr.open = function(method, url, ...args) {{
+                                this._url = url.toLowerCase();
+                                return originalOpen.call(this, method, url, ...args);
+                            }};
+                            
+                            xhr.send = function(data) {{
+                                if (this._url && (
+                                    this._url.includes('ipapi') || this._url.includes('ipify') ||
+                                    this._url.includes('ipinfo') || this._url.includes('whatismyip') ||
+                                    this._url.includes('whoer.com') || this._url.includes('httpbin.org/ip')
+                                )) {{
+                                    console.log('🚫 BLOCKED XHR IP API:', this._url);
+                                    
+                                    setTimeout(() => {{
+                                        Object.defineProperty(this, 'readyState', {{ value: 4 }});
+                                        Object.defineProperty(this, 'status', {{ value: 200 }});
+                                        Object.defineProperty(this, 'responseText', {{ 
+                                            value: JSON.stringify(SPOOF_DATA)
+                                        }});
+                                        if (this.onreadystatechange) this.onreadystatechange();
+                                        if (this.onload) this.onload();
+                                    }}, 10);
+                                    return;
+                                }}
+                                
+                                return originalSend.call(this, data);
+                            }};
+                            
+                            return xhr;
+                        }};
+                        
+                        // 4. AGGRESSIVE DOM IP REPLACEMENT
+                        function replaceAllIPs() {{
+                            try {{
+                                const walker = document.createTreeWalker(
+                                    document.body || document.documentElement,
+                                    NodeFilter.SHOW_TEXT,
+                                    null,
+                                    false
+                                );
+                                
+                                let node;
+                                const updates = [];
+                                
+                                while ((node = walker.nextNode())) {{
+                                    let text = node.textContent;
+                                    let changed = false;
+                                    
+                                    // Replace ANY IP pattern
+                                    text = text.replace(/\\b(?:[0-9]{{1,3}}\\.?){{3}}[0-9]{{1,3}}\\b/g, () => {{
+                                        changed = true;
+                                        return SPOOF_IP;
+                                    }});
+                                    
+                                    // Replace IPv6
+                                    text = text.replace(/\\b(?:[0-9a-fA-F]{{1,4}}:){{2,7}}[0-9a-fA-F]{{1,4}}\\b/g, () => {{
+                                        changed = true;
+                                        return SPOOF_IP;
+                                    }});
+                                    
+                                    // Location replacements
+                                    const replacements = {{
+                                        'India': 'United States',
+                                        'Bhubaneswar': 'New York',
+                                        'Odisha': 'New York',
+                                        'Asia/Calcutta': 'America/New_York',
+                                        'Asia/Kolkata': 'America/New_York',
+                                        'Bharti Airtel': 'DigitalOcean LLC'
+                                    }};
+                                    
+                                    for (const [find, replace] of Object.entries(replacements)) {{
+                                        if (text.includes(find)) {{
+                                            text = text.replace(new RegExp(find, 'gi'), replace);
+                                            changed = true;
+                                        }}
+                                    }}
+                                    
+                                    if (changed) {{
+                                        updates.push({{ node, text }});
+                                    }}
+                                }}
+                                
+                                updates.forEach(({{ node, text }}) => {{
+                                    node.textContent = text;
+                                }});
+                                
+                            }} catch(e) {{
+                                console.error('IP replacement error:', e);
+                            }}
+                        }}
+                        
+                        // 5. RUN REPLACEMENTS MULTIPLE TIMES
+                        replaceAllIPs();
+                        setTimeout(replaceAllIPs, 100);
+                        setTimeout(replaceAllIPs, 500);
+                        setTimeout(replaceAllIPs, 1000);
+                        setTimeout(replaceAllIPs, 2000);
+                        
+                        // Monitor DOM changes
+                        if (window.MutationObserver) {{
+                            new MutationObserver(() => {{
+                                setTimeout(replaceAllIPs, 50);
+                            }}).observe(document.body || document.documentElement, {{
+                                childList: true,
+                                subtree: true,
+                                characterData: true
+                            }});
+                        }}
+                        
+                        console.log('🇺🇸 CROXYPROXY: ALL IP DETECTION BLOCKED!');
+                    }})();
+                    </script>
+                    '''
+                    
+                    # Inject IP blocking script FIRST
+                    if '<head>' in html_content:
+                        html_content = html_content.replace('<head>', f'<head>{ip_blocking_script}')
+                    elif '<html>' in html_content:
+                        html_content = html_content.replace('<html>', f'<html><head>{ip_blocking_script}</head>')
+                    else:
+                        html_content = f'<html><head>{ip_blocking_script}</head><body>{html_content}</body></html>'
+                    
                     # Simple URL rewriting for CSS/JS resources (NOT Base64 encoding)
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
                     
