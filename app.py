@@ -195,12 +195,14 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     window.fetch = function(url, options = {{}}) {{
         const urlStr = url.toString();
         
-        // Block ALL IP detection APIs and return fake US data
+        // Block ALL IP/ISP detection APIs and return fake US data
         if (urlStr.includes('ipapi') || urlStr.includes('ipify') || urlStr.includes('ipinfo') || 
             urlStr.includes('ip-api') || urlStr.includes('whatismyip') || urlStr.includes('myip') ||
             urlStr.includes('ipgeolocation') || urlStr.includes('geoip') || urlStr.includes('ip2location') ||
             urlStr.includes('maxmind') || urlStr.includes('iplocation') || urlStr.includes('getip') ||
-            urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip')) {{
+            urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip') ||
+            urlStr.includes('whoer.com/api') || urlStr.includes('/api_v1/') || urlStr.includes('isp-fraud') ||
+            urlStr.includes('source-proxy') || urlStr.includes('source-check') || urlStr.includes('get-dns')) {{
             console.log('🇺🇸 CROXYPROXY: Blocking IP detection API:', urlStr);
             return Promise.resolve(new Response(JSON.stringify({{
                 ip: "{proxy_ip}",
@@ -489,6 +491,37 @@ def ping():
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
+
+@app.get("/api_v1/{path:path}")
+async def block_isp_apis(path: str):
+    """Block ISP detection APIs and return fake US data"""
+    print(f"🚫 BLOCKING ISP API: /api_v1/{path}")
+    return {
+        "ip": await get_actual_proxy_ip(),
+        "country": "United States",
+        "country_code": "US",
+        "region": "NY",
+        "city": "New York",
+        "isp": "DigitalOcean, LLC",
+        "org": "DigitalOcean, LLC",
+        "as": "AS14061 DigitalOcean, LLC",
+        "asname": "DIGITALOCEAN-ASN",
+        "mobile": False,
+        "proxy": False,
+        "hosting": True
+    }
+
+@app.get("/collect")
+@app.post("/collect") 
+async def block_ga_collect(request: Request):
+    """Block Google Analytics collect and return success"""
+    print(f"🚫 BLOCKING GA4 COLLECT: {request.url}")
+    # Return 1x1 transparent pixel
+    return Response(
+        content=b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x21\xF9\x04\x01\x00\x00\x00\x00\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x04\x01\x00\x3B',
+        media_type="image/gif",
+        headers={"Cache-Control": "no-cache"}
+    )
 
 @app.get("/proxy/{path:path}")
 async def proxy_page(path: str, request: Request):
