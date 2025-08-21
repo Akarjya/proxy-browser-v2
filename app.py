@@ -563,11 +563,11 @@ async def proxy_page(path: str, request: Request):
                         """)
                     
                     # Server-side IP replacement (aggressive) with dynamic proxy IP
-                    proxy_ip = await get_actual_proxy_ip()
-                    print(f"🔧 Performing server-side IP replacement with {proxy_ip}...")
+                    current_proxy_ip = await get_actual_proxy_ip()
+                    print(f"🔧 Performing server-side IP replacement with {current_proxy_ip}...")
                     # Replace various IP patterns
-                    html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', proxy_ip, html_content)
-                    html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', proxy_ip, html_content)  # IPv6
+                    html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', current_proxy_ip, html_content)
+                    html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', current_proxy_ip, html_content)  # IPv6
                     html_content = re.sub(r'\bIndia\b', 'United States', html_content)
                     html_content = re.sub(r'\bBhubaneswar\b', 'New York', html_content)
                     html_content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', html_content)
@@ -621,7 +621,7 @@ async def proxy_page(path: str, request: Request):
                     processed_content = rewrite_html_content(html_content, path, proxy_base)
                     
                     # Replace {proxy_ip} placeholder in script with actual IP
-                    processed_content = processed_content.replace('{proxy_ip}', proxy_ip)
+                    processed_content = processed_content.replace('{proxy_ip}', current_proxy_ip)
                     
                     return HTMLResponse(
                         content=processed_content,
