@@ -65,10 +65,10 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
     # Get actual proxy IP dynamically
     proxy_ip = await get_actual_proxy_ip()
     
-    # Preserve original headers but modify location-related ones
-    for name, value in original_request.headers.items():
-        if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding']:
-            headers[name] = value
+    # CRITICAL: Don't preserve original headers that leak Render.com location
+    # Only preserve User-Agent and Accept headers
+    headers["User-Agent"] = original_request.headers.get("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    headers["Accept"] = original_request.headers.get("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
     
     # Override location-related headers with US data using dynamic proxy IP
     headers.update({
@@ -100,9 +100,17 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
         "X-ISP": "DigitalOcean, LLC",
         "X-ASN": "AS14061",
         "X-Organization": "DigitalOcean, LLC",
+        "X-Originating-IP": proxy_ip,
+        "X-Source-IP": proxy_ip,
+        "X-Coming-From": "US",
+        "X-GeoIP-Country": "US",
+        "X-GeoIP-Region": "NY",
+        "X-GeoIP-City": "New York",
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache"
+        "Pragma": "no-cache",
+        "Referer": f"https://{urlparse(target_url).netloc}/",
+        "Origin": f"https://{urlparse(target_url).netloc}"
     })
     
     return headers
@@ -693,15 +701,29 @@ async def proxy_page(path: str, request: Request):
                     };
                     
                     // Set global location data for GA4
+                    // Set global location data for GA4 with dynamic IP
                     gtag('config', 'G-BX28RFEZ30', {
                         country: 'US',
                         region: 'NY',
                         city: 'New York',
+                        user_ip: '{proxy_ip}',
                         custom_map: {
                             country: 'US',
                             region: 'NY',
-                            city: 'New York'
-                        }
+                            city: 'New York',
+                            user_ip: '{proxy_ip}'
+                        },
+                        send_page_view: false
+                    });
+                    
+                    // Send pageview with forced IP
+                    gtag('event', 'page_view', {
+                        page_title: document.title,
+                        page_location: window.location.href,
+                        user_ip: '{proxy_ip}',
+                        country: 'US',
+                        region: 'NY',
+                        city: 'New York'
                     });
                     </script>
                     '''
