@@ -1067,22 +1067,22 @@ async def proxy_page(path: str, request: Request):
                         delete window.webkitRTCPeerConnection;
                         delete window.mozRTCPeerConnection;
                         
-                        // 2. OVERRIDE FETCH FOR ALL IP APIs
+                        // 2. REDIRECT ALL IP APIs TO OUR SERVER
                         const originalFetch = window.fetch;
                         window.fetch = function(url, options) {{
                             const urlStr = url.toString().toLowerCase();
                             
+                            // Redirect ALL IP detection APIs to our server
                             const ipApiPatterns = [
                                 'ipapi', 'ipify', 'ipinfo', 'whatismyip', 'geoip', 'iplocation',
-                                'ip-api', 'freegeoip', 'whoer.com', 'httpbin.org/ip', 'icanhazip.com'
+                                'ip-api', 'freegeoip', 'whoer.com', 'httpbin.org/ip', 'icanhazip.com',
+                                'extreme-ip-lookup', 'ip2location', 'ipstack', 'ipdata.co'
                             ];
                             
                             if (ipApiPatterns.some(pattern => urlStr.includes(pattern))) {{
-                                console.log('🚫 BLOCKED IP API:', urlStr);
-                                return Promise.resolve(new Response(JSON.stringify(SPOOF_DATA), {{
-                                    status: 200,
-                                    headers: {{ 'Content-Type': 'application/json' }}
-                                }}));
+                                console.log('🔄 REDIRECTING IP API TO OUR SERVER:', urlStr);
+                                // Redirect to our server's IP endpoint
+                                return originalFetch.call(this, window.location.origin + '/ip', options);
                             }}
                             
                             return originalFetch.call(this, url, options);
@@ -1106,17 +1106,21 @@ async def proxy_page(path: str, request: Request):
                                     this._url.includes('ipinfo') || this._url.includes('whatismyip') ||
                                     this._url.includes('whoer.com') || this._url.includes('httpbin.org/ip')
                                 )) {{
-                                    console.log('🚫 BLOCKED XHR IP API:', this._url);
+                                    console.log('🔄 REDIRECTING XHR IP API TO OUR SERVER:', this._url);
                                     
-                                    setTimeout(() => {{
+                                    // Redirect to our server instead of blocking
+                                    const serverXHR = new OriginalXHR();
+                                    serverXHR.open('GET', window.location.origin + '/ip');
+                                    serverXHR.onload = () => {{
                                         Object.defineProperty(this, 'readyState', {{ value: 4 }});
                                         Object.defineProperty(this, 'status', {{ value: 200 }});
                                         Object.defineProperty(this, 'responseText', {{ 
-                                            value: JSON.stringify(SPOOF_DATA)
+                                            value: serverXHR.responseText
                                         }});
                                         if (this.onreadystatechange) this.onreadystatechange();
                                         if (this.onload) this.onload();
-                                    }}, 10);
+                                    }};
+                                    serverXHR.send();
                                     return;
                                 }}
                                 
@@ -1366,6 +1370,70 @@ async def proxy_page(path: str, request: Request):
         </body>
         </html>
         """)
+
+# NETWORK-LEVEL IP BLOCKING - CroxyProxy Style
+# Block ALL possible IP detection APIs at server level
+
+@app.get("/ip")
+@app.get("/json") 
+@app.get("/ipapi")
+@app.get("/ipify")
+@app.get("/ipinfo")
+@app.get("/geoip")
+@app.get("/whatismyip")
+@app.get("/myip")
+@app.get("/checkip")
+@app.get("/api/ip")
+@app.get("/api/json")
+@app.get("/api/geoip")
+async def block_ip_detection_network():
+    """Block ALL IP detection APIs at network level - CroxyProxy style"""
+    proxy_ip = await get_actual_proxy_ip()
+    print(f"🚫 NETWORK BLOCK: IP detection API blocked, returning US data with IP: {proxy_ip}")
+    
+    return {
+        "ip": proxy_ip,
+        "country": "United States",
+        "countryCode": "US",
+        "country_code": "US", 
+        "region": "NY",
+        "regionName": "New York",
+        "region_name": "New York",
+        "city": "New York",
+        "zip": "10001",
+        "lat": 40.7128,
+        "lon": -74.0060,
+        "latitude": 40.7128,
+        "longitude": -74.0060,
+        "timezone": "America/New_York",
+        "isp": "DigitalOcean, LLC",
+        "org": "DigitalOcean, LLC",
+        "as": "AS14061 DigitalOcean, LLC",
+        "asname": "DIGITALOCEAN-ASN",
+        "query": proxy_ip,
+        "status": "success",
+        "currency": "USD",
+        "languages": "en-US,en"
+    }
+
+# Handle external IP detection services
+@app.get("/external/{service}")
+async def handle_external_ip_services(service: str):
+    """Handle external IP detection services"""
+    proxy_ip = await get_actual_proxy_ip()
+    
+    if service.lower() in ['ipapi', 'ipify', 'ipinfo', 'geoip', 'whatismyip', 'httpbin']:
+        print(f"🚫 EXTERNAL BLOCK: {service} blocked, returning US data")
+        return {
+            "ip": proxy_ip,
+            "country": "United States", 
+            "city": "New York",
+            "region": "NY",
+            "timezone": "America/New_York",
+            "isp": "DigitalOcean, LLC"
+        }
+    
+    return {"error": "Service not found"}
 
 if __name__ == "__main__":
     import uvicorn
