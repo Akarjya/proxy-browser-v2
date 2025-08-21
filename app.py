@@ -1110,21 +1110,14 @@ async def proxy_page(path: str, request: Request):
                     print("✅ Server-side IP replacement completed")
                     
                     # Simple URL rewriting for CSS/JS resources (NOT Base64 encoding)
-                    import re
-                    from urllib.parse import urljoin, urlparse
-                    
-                    # Fix relative URLs to absolute proxy URLs
-                    def fix_relative_urls(content, base_url, proxy_base):
-                        # Replace relative URLs with proxy URLs
-                        content = re.sub(
-                            r'(href|src|action)=(["\'])(?!https?://|data:|javascript:|mailto:)([^"\']+)\2',
-                            lambda m: f'{m.group(1)}={m.group(2)}{proxy_base}/{urljoin(base_url, m.group(3))}{m.group(2)}',
-                            content
-                        )
-                        return content
-                    
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
-                    processed_content = fix_relative_urls(html_content, path, proxy_base)
+                    
+                    # Replace relative URLs with proxy URLs
+                    processed_content = re.sub(
+                        r'(href|src|action)=(["\'])(?!https?://|data:|javascript:|mailto:)([^"\']+)\2',
+                        lambda m: f'{m.group(1)}={m.group(2)}{proxy_base}/{urljoin(path, m.group(3))}{m.group(2)}',
+                        html_content
+                    )
                     
                     return HTMLResponse(
                         content=processed_content,
