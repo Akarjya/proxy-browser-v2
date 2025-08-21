@@ -24,44 +24,78 @@ PROXY_CONFIG = {
     "target_url": os.environ.get("DEFAULT_TARGET_URL", "https://ybsq.xyz/")
 }
 
+# Global variable to store actual proxy IP
+CURRENT_PROXY_IP = None
+
 def get_proxy_url():
     return f"http://{PROXY_CONFIG['username']}:{PROXY_CONFIG['password']}@{PROXY_CONFIG['server']}"
 
-def get_spoofed_headers(original_request: Request, target_url: str):
+async def get_actual_proxy_ip():
+    """Get the actual IP address from our proxy"""
+    global CURRENT_PROXY_IP
+    
+    if CURRENT_PROXY_IP:
+        return CURRENT_PROXY_IP
+    
+    try:
+        proxy_url = get_proxy_url()
+        async with httpx.AsyncClient(
+            proxies={"http://": proxy_url, "https://": proxy_url},
+            timeout=10.0,
+            verify=False
+        ) as client:
+            # Get IP from httpbin
+            response = await client.get("https://httpbin.org/ip")
+            if response.status_code == 200:
+                ip_data = response.json()
+                CURRENT_PROXY_IP = ip_data.get("origin", "").split(",")[0].strip()
+                print(f"🌐 PROXY: Detected actual proxy IP: {CURRENT_PROXY_IP}")
+                return CURRENT_PROXY_IP
+    except Exception as e:
+        print(f"❌ Failed to get proxy IP: {e}")
+    
+    # Fallback IP
+    CURRENT_PROXY_IP = "8.8.8.8"
+    return CURRENT_PROXY_IP
+
+async def get_spoofed_headers(original_request: Request, target_url: str):
     """Get headers with US location spoofing while preserving original User-Agent"""
     headers = {}
+    
+    # Get actual proxy IP dynamically
+    proxy_ip = await get_actual_proxy_ip()
     
     # Preserve original headers but modify location-related ones
     for name, value in original_request.headers.items():
         if name.lower() not in ['host', 'connection', 'content-length', 'transfer-encoding']:
             headers[name] = value
     
-    # Override location-related headers with US data
+    # Override location-related headers with US data using dynamic proxy IP
     headers.update({
         "Accept-Language": "en-US,en;q=0.9",
-        "X-Forwarded-For": "172.56.47.191",
+        "X-Forwarded-For": proxy_ip,
         "CF-IPCountry": "US", 
         "CF-Region": "NY",
         "CF-City": "New York",
-        "X-Real-IP": "172.56.47.191",
+        "X-Real-IP": proxy_ip,
         "X-Forwarded-Proto": "https",
         "X-Appengine-Country": "US",
         "X-Appengine-Region": "ny", 
         "X-Appengine-City": "newyork",
-        "X-Appengine-User-IP": "172.56.47.191",
-        "X-Client-IP": "172.56.47.191",
-        "X-Cluster-Client-IP": "172.56.47.191",
-        "X-Original-Forwarded-For": "172.56.47.191",
-        "True-Client-IP": "172.56.47.191",
-        "X-Remote-IP": "172.56.47.191",
-        "X-Remote-Addr": "172.56.47.191",
-        "Remote-Addr": "172.56.47.191",
-        "HTTP_X_FORWARDED_FOR": "172.56.47.191",
-        "HTTP_CLIENT_IP": "172.56.47.191",
-        "HTTP_X_REAL_IP": "172.56.47.191",
-        "Forwarded": "for=172.56.47.191;proto=https;host=ybsq.xyz",
-        "X-Forwarded-Host": "ybsq.xyz",
-        "X-Original-Host": "ybsq.xyz",
+        "X-Appengine-User-IP": proxy_ip,
+        "X-Client-IP": proxy_ip,
+        "X-Cluster-Client-IP": proxy_ip,
+        "X-Original-Forwarded-For": proxy_ip,
+        "True-Client-IP": proxy_ip,
+        "X-Remote-IP": proxy_ip,
+        "X-Remote-Addr": proxy_ip,
+        "Remote-Addr": proxy_ip,
+        "HTTP_X_FORWARDED_FOR": proxy_ip,
+        "HTTP_CLIENT_IP": proxy_ip,
+        "HTTP_X_REAL_IP": proxy_ip,
+        "Forwarded": f"for={proxy_ip};proto=https;host={urlparse(target_url).netloc}",
+        "X-Forwarded-Host": urlparse(target_url).netloc,
+        "X-Original-Host": urlparse(target_url).netloc,
         "Host": urlparse(target_url).netloc,
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
@@ -194,36 +228,9 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
             }}));
         }}
         
-        // Redirect GA4 calls to our custom endpoint
-        if (urlStr.includes('google-analytics.com/collect') || 
-            urlStr.includes('google-analytics.com/g/collect')) {{
-            console.log('🇺🇸 CROXYPROXY: Redirecting GA4 collect to custom endpoint');
-            
-            // Redirect to our custom GA4 endpoint that forces US location
-            const redirectUrl = urlStr.replace(
-                /https:\/\/(www\.)?google-analytics\.com\/(g\/)?collect/,
-                window.location.origin + '/ga4-collect'
-            );
-            
-            return originalFetch.call(this, redirectUrl, options);
-        }}
-        
-        // Allow other Google services with US headers
-        if (urlStr.includes('googletagmanager.com') ||
-            urlStr.includes('analytics.google.com')) {{
-            console.log('🇺🇸 CROXYPROXY: Adding US headers to Google services');
-            options.headers = {{
-                ...options.headers,
-                'CF-IPCountry': 'US',
-                'X-Forwarded-For': '172.56.47.191',
-                'X-Real-IP': '172.56.47.191',
-                'Accept-Language': 'en-US,en;q=0.9'
-            }};
-        }}
-        
-        // Add US headers to all other Google services
+        // Add US headers to all analytics requests
         if (urlStr.includes('google') || urlStr.includes('analytics') || urlStr.includes('adsense')) {{
-            console.log('🇺🇸 CROXYPROXY: Adding US headers to Google services');
+            console.log('🇺🇸 CROXYPROXY: Adding US headers to analytics');
             options.headers = {{
                 ...options.headers,
                 'CF-IPCountry': 'US',
@@ -328,8 +335,8 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
             }});
     }}
     
-    // Override common global variables used for IP detection
-    window.userIP = "172.56.47.191";
+    // Override common global variables used for IP detection with dynamic IP
+    window.userIP = "{proxy_ip}";
     window.userCountry = "United States";
     window.userCity = "New York";
     window.userRegion = "NY";
@@ -338,8 +345,8 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
     window.userLongitude = -74.0060;
     
     // Override any existing IP detection functions
-    if (window.getIP) window.getIP = () => "172.56.47.191";
-    if (window.getUserIP) window.getUserIP = () => "172.56.47.191";
+    if (window.getIP) window.getIP = () => "{proxy_ip}";
+    if (window.getUserIP) window.getUserIP = () => "{proxy_ip}";
     if (window.getLocation) window.getLocation = () => "New York, United States";
     if (window.getCountry) window.getCountry = () => "United States";
     
@@ -474,57 +481,6 @@ def ping():
 def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
 
-@app.get("/ga4-collect")
-@app.post("/ga4-collect")
-async def ga4_collect(request: Request):
-    """Custom GA4 collect endpoint that sends US location data"""
-    try:
-        # Get original GA4 parameters
-        params = dict(request.query_params)
-        
-        # Force US location parameters
-        params.update({
-            'uip': '172.56.47.191',  # User IP
-            'geoid': '21167',        # US geo ID
-            'ul': 'en-us',          # User language
-            'sr': '1920x1080',      # Screen resolution
-            'vp': '1920x1080',      # Viewport
-            'dr': 'https://ybsq.xyz',  # Document referrer
-        })
-        
-        # Build GA4 collect URL
-        ga4_url = "https://www.google-analytics.com/g/collect"
-        
-        # Create proxy client
-        proxy_url = get_proxy_url()
-        
-        async with httpx.AsyncClient(
-            proxies={"http://": proxy_url, "https://": proxy_url},
-            timeout=10.0,
-            verify=False
-        ) as client:
-            # Send to GA4 with US headers
-            headers = {
-                "User-Agent": request.headers.get("User-Agent", ""),
-                "CF-IPCountry": "US",
-                "X-Forwarded-For": "172.56.47.191",
-                "X-Real-IP": "172.56.47.191",
-                "Accept-Language": "en-US,en;q=0.9"
-            }
-            
-            response = await client.get(ga4_url, params=params, headers=headers)
-            print(f"🎯 GA4: Sent collect request with US location - Status: {response.status_code}")
-            
-            return Response(
-                content=response.content,
-                media_type="image/gif",
-                headers={"Access-Control-Allow-Origin": "*"}
-            )
-            
-    except Exception as e:
-        print(f"❌ GA4 collect error: {e}")
-        return Response(content="", media_type="image/gif")
-
 @app.get("/proxy/{path:path}")
 async def proxy_page(path: str, request: Request):
     try:
@@ -537,8 +493,8 @@ async def proxy_page(path: str, request: Request):
         
         print(f"🌐 PROXY: Fetching {path}")
         
-        # Get spoofed headers
-        headers = get_spoofed_headers(request, path)
+        # Get spoofed headers with dynamic proxy IP
+        headers = await get_spoofed_headers(request, path)
         
         # Create proxy client
         proxy_url = get_proxy_url()
@@ -574,19 +530,6 @@ async def proxy_page(path: str, request: Request):
             
             content_type = response.headers.get('content-type', '').lower()
             
-            # Special handling for GA4 collect requests
-            if 'google-analytics.com/collect' in path or 'google-analytics.com/g/collect' in path:
-                print("🎯 GA4: Intercepting collect request, forcing US location")
-                # Return success response to prevent real request
-                return Response(
-                    content="1x1.gif", 
-                    media_type="image/gif",
-                    headers={
-                        "Access-Control-Allow-Origin": "*",
-                        "Cache-Control": "no-cache"
-                    }
-                )
-            
             # Handle different content types properly
             if 'text/html' in content_type:
                 # HTML content - process and rewrite
@@ -619,11 +562,12 @@ async def proxy_page(path: str, request: Request):
                         </html>
                         """)
                     
-                    # Server-side IP replacement (aggressive)
-                    print("🔧 Performing server-side IP replacement...")
+                    # Server-side IP replacement (aggressive) with dynamic proxy IP
+                    proxy_ip = await get_actual_proxy_ip()
+                    print(f"🔧 Performing server-side IP replacement with {proxy_ip}...")
                     # Replace various IP patterns
-                    html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', '172.56.47.191', html_content)
-                    html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', '172.56.47.191', html_content)  # IPv6
+                    html_content = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', proxy_ip, html_content)
+                    html_content = re.sub(r'\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{1,4}){7}\b', proxy_ip, html_content)  # IPv6
                     html_content = re.sub(r'\bIndia\b', 'United States', html_content)
                     html_content = re.sub(r'\bBhubaneswar\b', 'New York', html_content)
                     html_content = re.sub(r'\bAsia/Calcutta\b', 'America/New_York', html_content)
@@ -675,6 +619,9 @@ async def proxy_page(path: str, request: Request):
                     # Rewrite content like CroxyProxy
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
                     processed_content = rewrite_html_content(html_content, path, proxy_base)
+                    
+                    # Replace {proxy_ip} placeholder in script with actual IP
+                    processed_content = processed_content.replace('{proxy_ip}', proxy_ip)
                     
                     return HTMLResponse(
                         content=processed_content,
