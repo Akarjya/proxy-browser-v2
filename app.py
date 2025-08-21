@@ -97,6 +97,9 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
         "X-Forwarded-Host": urlparse(target_url).netloc,
         "X-Original-Host": urlparse(target_url).netloc,
         "Host": urlparse(target_url).netloc,
+        "X-ISP": "DigitalOcean, LLC",
+        "X-ASN": "AS14061",
+        "X-Organization": "DigitalOcean, LLC",
         "Accept-Encoding": "gzip, deflate",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache"
@@ -200,7 +203,7 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
             urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip')) {{
             console.log('🇺🇸 CROXYPROXY: Blocking IP detection API:', urlStr);
             return Promise.resolve(new Response(JSON.stringify({{
-                ip: "172.56.47.191",
+                ip: "{proxy_ip}",
                 country: "United States",
                 country_code: "US",
                 country_name: "United States", 
@@ -219,10 +222,11 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
                 country_calling_code: "+1",
                 currency: "USD",
                 languages: "en-US,en",
-                isp: "Digital Ocean",
-                org: "Digital Ocean",
+                isp: "DigitalOcean, LLC",
+                org: "DigitalOcean, LLC",
                 as: "AS14061 DigitalOcean, LLC",
-                query: "172.56.47.191"
+                asname: "DIGITALOCEAN-ASN",
+                query: "{proxy_ip}"
             }}), {{
                 headers: {{ 'Content-Type': 'application/json' }}
             }}));
@@ -264,14 +268,16 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
                     Object.defineProperty(this, 'status', {{ value: 200, writable: false }});
                     Object.defineProperty(this, 'responseText', {{ 
                         value: JSON.stringify({{
-                            ip: "172.56.47.191",
+                            ip: "{proxy_ip}",
                             country: "United States",
                             country_code: "US",
                             city: "New York",
                             region: "NY",
                             lat: 40.7128,
                             lon: -74.0060,
-                            timezone: "America/New_York"
+                            timezone: "America/New_York",
+                            isp: "DigitalOcean, LLC",
+                            org: "DigitalOcean, LLC"
                         }}),
                         writable: false 
                     }});
