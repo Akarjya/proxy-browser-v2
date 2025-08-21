@@ -149,6 +149,17 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
         content
     )
     
+    # CRITICAL: Replace all scrap.ybsq.xyz references with ybsq.xyz for AdSense
+    if 'scrap.ybsq.xyz' in content:
+        print("🚨 ADSENSE: Found scrap.ybsq.xyz references, replacing with ybsq.xyz...")
+        content = content.replace('scrap.ybsq.xyz', 'ybsq.xyz')
+        content = content.replace('https://scrap.ybsq.xyz', 'https://ybsq.xyz')
+        content = content.replace('http://scrap.ybsq.xyz', 'https://ybsq.xyz')
+        # Also replace URL encoded versions
+        content = content.replace('https%3A%2F%2Fscrap.ybsq.xyz', 'https%3A%2F%2Fybsq.xyz')
+        content = content.replace('scrap%2Eybsq%2Exyz', 'ybsq%2Exyz')
+        print("✅ ADSENSE: Domain replacement completed")
+    
     # Add comprehensive spoofing script
     spoof_script = f"""
     <script>
@@ -657,6 +668,13 @@ async def ga4_collect_override(request: Request):
     # Get original parameters
     params = dict(request.query_params)
     
+    # CRITICAL: Replace scrap.ybsq.xyz with ybsq.xyz in dl parameter
+    if 'dl' in params and 'scrap.ybsq.xyz' in params['dl']:
+        print(f"🚨 GA4: Replacing scrap.ybsq.xyz with ybsq.xyz in dl parameter")
+        params['dl'] = params['dl'].replace('scrap.ybsq.xyz', 'ybsq.xyz')
+        params['dl'] = params['dl'].replace('/proxy/https://', '/')
+        print(f"✅ GA4: New dl parameter: {params['dl']}")
+    
     # Force US location in GA4 parameters
     params.update({
         'uip': proxy_ip,  # User IP override
@@ -665,7 +683,7 @@ async def ga4_collect_override(request: Request):
         'cn': 'United States',  # Country name
         'cs': 'DigitalOcean',   # Campaign source (ISP)
         'cm': 'organic',        # Campaign medium
-        'dr': f'https://{request.headers.get("host", "scrap.ybsq.xyz")}',  # Document referrer
+        'dr': 'https://ybsq.xyz/',  # Force ybsq.xyz referrer
     })
     
     # Forward to real GA4 through proxy with US IP
