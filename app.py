@@ -141,6 +141,31 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     // CroxyProxy-style spoofing
     console.log('🇺🇸 CROXYPROXY: Initializing location spoofing...');
     
+    // Block WebRTC to prevent IP leaks
+    if (window.RTCPeerConnection) {{
+        const originalRTC = window.RTCPeerConnection;
+        window.RTCPeerConnection = function(config) {{
+            console.log('🇺🇸 CROXYPROXY: Blocking WebRTC');
+            // Return dummy connection that doesn't leak IP
+            return {{
+                createDataChannel: () => ({{}}),
+                createOffer: () => Promise.resolve({{}}),
+                createAnswer: () => Promise.resolve({{}}),
+                setLocalDescription: () => Promise.resolve(),
+                setRemoteDescription: () => Promise.resolve(),
+                addIceCandidate: () => Promise.resolve(),
+                close: () => {{}},
+                addEventListener: () => {{}},
+                removeEventListener: () => {{}}
+            }};
+        }};
+        
+        // Also block webkitRTCPeerConnection
+        if (window.webkitRTCPeerConnection) {{
+            window.webkitRTCPeerConnection = window.RTCPeerConnection;
+        }}
+    }}
+    
     // Override geolocation
     if (navigator.geolocation) {{
         const fakePosition = {{
@@ -195,14 +220,12 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     window.fetch = function(url, options = {{}}) {{
         const urlStr = url.toString();
         
-        // Block ALL IP/ISP detection APIs and return fake US data
+        // Block ALL IP detection APIs and return fake US data
         if (urlStr.includes('ipapi') || urlStr.includes('ipify') || urlStr.includes('ipinfo') || 
             urlStr.includes('ip-api') || urlStr.includes('whatismyip') || urlStr.includes('myip') ||
             urlStr.includes('ipgeolocation') || urlStr.includes('geoip') || urlStr.includes('ip2location') ||
             urlStr.includes('maxmind') || urlStr.includes('iplocation') || urlStr.includes('getip') ||
-            urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip') ||
-            urlStr.includes('whoer.com/api') || urlStr.includes('/api_v1/') || urlStr.includes('isp-fraud') ||
-            urlStr.includes('source-proxy') || urlStr.includes('source-check') || urlStr.includes('get-dns')) {{
+            urlStr.includes('checkip') || urlStr.includes('showip') || urlStr.includes('findip')) {{
             console.log('🇺🇸 CROXYPROXY: Blocking IP detection API:', urlStr);
             return Promise.resolve(new Response(JSON.stringify({{
                 ip: "{proxy_ip}",
@@ -351,6 +374,13 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
     window.userTimezone = "America/New_York";
     window.userLatitude = 40.7128;
     window.userLongitude = -74.0060;
+    window.userISP = "DigitalOcean, LLC";
+    window.userOrg = "DigitalOcean, LLC";
+    window.userASN = "AS14061";
+    window.userHosting = true;
+    window.userProxy = false;
+    window.userVPN = false;
+    window.userTor = false;
     
     // Override any existing IP detection functions
     if (window.getIP) window.getIP = () => "{proxy_ip}";
@@ -493,34 +523,58 @@ def health():
     return {"status": "healthy", "service": "proxy-browser-v2"}
 
 @app.get("/api_v1/{path:path}")
-async def block_isp_apis(path: str):
-    """Block ISP detection APIs and return fake US data"""
-    print(f"🚫 BLOCKING ISP API: /api_v1/{path}")
+async def handle_whoer_api(path: str, request: Request):
+    """Handle whoer.com API requests with fake US data"""
+    proxy_ip = await get_actual_proxy_ip()
+    print(f"🛡️ WHOER API: {path} - Returning US data with IP: {proxy_ip}")
+    
+    # Return fake US data for all whoer.com API calls
     return {
-        "ip": await get_actual_proxy_ip(),
+        "success": True,
+        "ip": proxy_ip,
         "country": "United States",
         "country_code": "US",
         "region": "NY",
         "city": "New York",
+        "latitude": 40.7128,
+        "longitude": -74.0060,
+        "timezone": "America/New_York",
         "isp": "DigitalOcean, LLC",
-        "org": "DigitalOcean, LLC",
+        "organization": "DigitalOcean, LLC",
         "as": "AS14061 DigitalOcean, LLC",
         "asname": "DIGITALOCEAN-ASN",
         "mobile": False,
         "proxy": False,
-        "hosting": True
+        "hosting": True,
+        "fraud_score": 0,
+        "risk_level": "low",
+        "vpn": False,
+        "tor": False,
+        "anonymizer": False,
+        "source": "datacenter",
+        "dns": ["8.8.8.8", "8.8.4.4"]
     }
 
-@app.get("/collect")
-@app.post("/collect") 
-async def block_ga_collect(request: Request):
-    """Block Google Analytics collect and return success"""
-    print(f"🚫 BLOCKING GA4 COLLECT: {request.url}")
+@app.get("/images/{path:path}")
+async def handle_images(path: str):
+    """Handle missing image requests"""
     # Return 1x1 transparent pixel
     return Response(
-        content=b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x21\xF9\x04\x01\x00\x00\x00\x00\x2C\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x04\x01\x00\x3B',
-        media_type="image/gif",
-        headers={"Cache-Control": "no-cache"}
+        content=b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82',
+        media_type="image/png"
+    )
+
+@app.get("/fonts/{path:path}")
+async def handle_fonts(path: str):
+    """Handle missing font requests"""
+    return Response(content="", media_type="font/woff2")
+
+@app.get("/_ipx/{path:path}")
+async def handle_ipx(path: str):
+    """Handle missing _ipx requests"""
+    return Response(
+        content=b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82',
+        media_type="image/png"
     )
 
 @app.get("/proxy/{path:path}")
