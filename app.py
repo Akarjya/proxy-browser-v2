@@ -149,17 +149,6 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
         content
     )
     
-    # CRITICAL: Replace all scrap.ybsq.xyz references with ybsq.xyz for AdSense
-    if 'scrap.ybsq.xyz' in content:
-        print("🚨 ADSENSE: Found scrap.ybsq.xyz references, replacing with ybsq.xyz...")
-        content = content.replace('scrap.ybsq.xyz', 'ybsq.xyz')
-        content = content.replace('https://scrap.ybsq.xyz', 'https://ybsq.xyz')
-        content = content.replace('http://scrap.ybsq.xyz', 'https://ybsq.xyz')
-        # Also replace URL encoded versions
-        content = content.replace('https%3A%2F%2Fscrap.ybsq.xyz', 'https%3A%2F%2Fybsq.xyz')
-        content = content.replace('scrap%2Eybsq%2Exyz', 'ybsq%2Exyz')
-        print("✅ ADSENSE: Domain replacement completed")
-    
     # Add comprehensive spoofing script
     spoof_script = f"""
     <script>
@@ -668,12 +657,19 @@ async def ga4_collect_override(request: Request):
     # Get original parameters
     params = dict(request.query_params)
     
-    # CRITICAL: Replace scrap.ybsq.xyz with ybsq.xyz in dl parameter
-    if 'dl' in params and 'scrap.ybsq.xyz' in params['dl']:
-        print(f"🚨 GA4: Replacing scrap.ybsq.xyz with ybsq.xyz in dl parameter")
-        params['dl'] = params['dl'].replace('scrap.ybsq.xyz', 'ybsq.xyz')
-        params['dl'] = params['dl'].replace('/proxy/https://', '/')
-        print(f"✅ GA4: New dl parameter: {params['dl']}")
+    # CRITICAL: Fix dl parameter to show original domain instead of proxy domain
+    if 'dl' in params and 'scrap.ybsq.xyz/proxy/' in params['dl']:
+        original_url = params['dl']
+        # Extract target domain and path from proxy URL
+        if '/proxy/https://' in original_url:
+            # Convert: https://scrap.ybsq.xyz/proxy/https://ybsq.xyz/path
+            # To: https://ybsq.xyz/path
+            target_part = original_url.split('/proxy/https://')[1]
+            params['dl'] = f'https://{target_part}'
+        elif '/proxy/http://' in original_url:
+            target_part = original_url.split('/proxy/http://')[1]
+            params['dl'] = f'http://{target_part}'
+        print(f"🚨 GA4: Fixed dl parameter from {original_url} to {params['dl']}")
     
     # Force US location in GA4 parameters
     params.update({
@@ -683,7 +679,7 @@ async def ga4_collect_override(request: Request):
         'cn': 'United States',  # Country name
         'cs': 'DigitalOcean',   # Campaign source (ISP)
         'cm': 'organic',        # Campaign medium
-        'dr': 'https://ybsq.xyz/',  # Force ybsq.xyz referrer
+        'dr': params.get('dl', '').split('?')[0] if 'dl' in params else 'https://example.com',  # Document referrer matches dl domain
     })
     
     # Forward to real GA4 through proxy with US IP
@@ -860,14 +856,46 @@ async def proxy_page(path: str, request: Request):
                     # Inject AdSense domain fix
                     adsense_fix = f'''
                     <script>
-                    // Complete Domain Spoofing - Make everything think we're on ybsq.xyz
-                    const originalDomain = 'ybsq.xyz';
-                    const originalOrigin = 'https://ybsq.xyz';
+                    // Dynamic Domain Detection - Works with ANY domain
+                    const currentPath = window.location.pathname;
+                    let originalDomain, originalOrigin;
+                    
+                    // Extract target domain from proxy URL
+                    if (currentPath.includes('/proxy/https://')) {{
+                        const targetUrl = currentPath.replace('/proxy/https%3A//', '').replace('/proxy/https://', '');
+                        originalDomain = targetUrl.split('/')[0];
+                        originalOrigin = 'https://' + originalDomain;
+                    }} else if (currentPath.includes('/proxy/http://')) {{
+                        const targetUrl = currentPath.replace('/proxy/http%3A//', '').replace('/proxy/http://', '');
+                        originalDomain = targetUrl.split('/')[0];
+                        originalOrigin = 'http://' + originalDomain;
+                    }} else {{
+                        // Fallback for Base64 URLs - decode from URL parameter
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const encodedUrl = urlParams.get('url');
+                        if (encodedUrl) {{
+                            try {{
+                                const decodedUrl = atob(encodedUrl);
+                                const url = new URL(decodedUrl);
+                                originalDomain = url.hostname;
+                                originalOrigin = url.origin;
+                            }} catch(e) {{
+                                originalDomain = 'example.com';
+                                originalOrigin = 'https://example.com';
+                            }}
+                        }} else {{
+                            originalDomain = 'example.com';
+                            originalOrigin = 'https://example.com';
+                        }}
+                    }}
+                    
+                    console.log(`🎯 DYNAMIC: Detected target domain: ${{originalDomain}}`);
+                    console.log(`🎯 DYNAMIC: Detected target origin: ${{originalOrigin}}`);
                     
                     // Override document properties
                     Object.defineProperty(document, 'domain', {{
                         get: function() {{ 
-                            console.log('📢 ADSENSE: Spoofed document.domain to ybsq.xyz');
+                            console.log(`📢 ADSENSE: Spoofed document.domain to ${{originalDomain}}`);
                             return originalDomain; 
                         }},
                         set: function() {{ /* ignore */ }}
@@ -875,20 +903,22 @@ async def proxy_page(path: str, request: Request):
                     
                     Object.defineProperty(document, 'URL', {{
                         get: function() {{ 
-                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                            const cleanPath = window.location.pathname.replace(`/proxy/https://${{originalDomain}}`, '').replace(`/proxy/http://${{originalDomain}}`, '') || '/';
+                            return originalOrigin + cleanPath + window.location.search;
                         }}
                     }});
                     
                     Object.defineProperty(document, 'documentURI', {{
                         get: function() {{ 
-                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                            const cleanPath = window.location.pathname.replace(`/proxy/https://${{originalDomain}}`, '').replace(`/proxy/http://${{originalDomain}}`, '') || '/';
+                            return originalOrigin + cleanPath + window.location.search;
                         }}
                     }});
                     
                     // Override window.location properties
                     Object.defineProperty(window.location, 'hostname', {{
                         get: function() {{ 
-                            console.log('📢 ADSENSE: Spoofed location.hostname to ybsq.xyz');
+                            console.log(`📢 ADSENSE: Spoofed location.hostname to ${{originalDomain}}`);
                             return originalDomain; 
                         }}
                     }});
@@ -899,21 +929,22 @@ async def proxy_page(path: str, request: Request):
                     
                     Object.defineProperty(window.location, 'origin', {{
                         get: function() {{ 
-                            console.log('📢 ADSENSE: Spoofed location.origin to https://ybsq.xyz');
+                            console.log(`📢 ADSENSE: Spoofed location.origin to ${{originalOrigin}}`);
                             return originalOrigin; 
                         }}
                     }});
                     
                     Object.defineProperty(window.location, 'href', {{
                         get: function() {{ 
-                            return originalOrigin + window.location.pathname.replace('/proxy/https://ybsq.xyz', '');
+                            const cleanPath = window.location.pathname.replace(`/proxy/https://${{originalDomain}}`, '').replace(`/proxy/http://${{originalDomain}}`, '') || '/';
+                            return originalOrigin + cleanPath + window.location.search;
                         }}
                     }});
                     
                     // Override document.referrer for AdSense
                     Object.defineProperty(document, 'referrer', {{
                         get: function() {{ 
-                            console.log('📢 ADSENSE: Spoofed document.referrer to ybsq.xyz');
+                            console.log(`📢 ADSENSE: Spoofed document.referrer to ${{originalDomain}}`);
                             return originalOrigin + '/'; 
                         }}
                     }});
@@ -928,7 +959,7 @@ async def proxy_page(path: str, request: Request):
                         }});
                     }} catch(e) {{ /* ignore cross-origin */ }}
                     
-                    console.log('📢 ADSENSE: Domain spoofed to ybsq.xyz');
+                    console.log(`📢 ADSENSE: Domain spoofed to ${{originalDomain}}`);
                     </script>
                     '''
                     
