@@ -104,7 +104,7 @@ async def get_spoofed_headers(original_request: Request, target_url: str):
     
     return headers
 
-def rewrite_html_content(content: str, base_url: str, proxy_base: str):
+def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip: str = "8.8.8.8"):
     """Rewrite HTML content like CroxyProxy"""
     
     # Parse base URL
@@ -396,6 +396,9 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str):
     </script>
     """
     
+    # Replace proxy_ip placeholder in the script
+    spoof_script = spoof_script.replace('{proxy_ip}', proxy_ip)
+    
     # Inject script and meta tags
     meta_viewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
     
@@ -618,10 +621,9 @@ async def proxy_page(path: str, request: Request):
                     
                     # Rewrite content like CroxyProxy
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
-                    processed_content = rewrite_html_content(html_content, path, proxy_base)
+                    processed_content = rewrite_html_content(html_content, path, proxy_base, current_proxy_ip)
                     
-                    # Replace {proxy_ip} placeholder in script with actual IP
-                    processed_content = processed_content.replace('{proxy_ip}', current_proxy_ip)
+                    # Template replacement already done in rewrite_html_content function
                     
                     return HTMLResponse(
                         content=processed_content,
