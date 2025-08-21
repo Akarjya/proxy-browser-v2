@@ -515,85 +515,13 @@ def rewrite_html_content(content: str, base_url: str, proxy_base: str, proxy_ip:
 async def root(url: str = None):
     """CroxyProxy-style root with Base64 encoded URL"""
     if url:
-        # Decode Base64 URL like CroxyProxy
+        # Decode Base64 URL and redirect to direct proxy (no loading page for resources)
         try:
             import base64
             decoded_url = base64.b64decode(url).decode('utf-8')
             
-            # Show CroxyProxy-style loading page first
-            loading_html = f"""
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Connecting to Proxy...</title>
-                <style>
-                    body {{
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        margin: 0;
-                        padding: 0;
-                        height: 100vh;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        text-align: center;
-                    }}
-                    .loader {{
-                        background: rgba(255, 255, 255, 0.1);
-                        padding: 60px;
-                        border-radius: 20px;
-                        backdrop-filter: blur(10px);
-                        max-width: 500px;
-                    }}
-                    .spinner {{
-                        border: 4px solid rgba(255, 255, 255, 0.3);
-                        border-top: 4px solid white;
-                        border-radius: 50%;
-                        width: 60px;
-                        height: 60px;
-                        animation: spin 1s linear infinite;
-                        margin: 0 auto 20px;
-                    }}
-                    @keyframes spin {{
-                        0% {{ transform: rotate(0deg); }}
-                        100% {{ transform: rotate(360deg); }}
-                    }}
-                    h2 {{ margin: 20px 0; font-size: 1.8em; }}
-                    .status {{ font-size: 14px; opacity: 0.8; margin: 10px 0; }}
-                    .target {{ 
-                        background: rgba(255, 255, 255, 0.2);
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        margin: 20px 0;
-                        word-break: break-all;
-                        font-size: 12px;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="loader">
-                    <div class="spinner"></div>
-                    <h2>🌐 Connecting to Proxy...</h2>
-                    <div class="status">🔒 Applying US location spoofing</div>
-                    <div class="status">🎯 Initializing AdSense domain fix</div>
-                    <div class="status">📊 Setting up GA4 parameter override</div>
-                    <div class="target">Target: {decoded_url}</div>
-                    <div class="status">⏳ Please wait...</div>
-                </div>
-                
-                <script>
-                    // Redirect after 2.5 seconds (CroxyProxy style)
-                    setTimeout(function() {{
-                        window.location.href = '/proxy/{decoded_url}';
-                    }}, 2500);
-                </script>
-            </body>
-            </html>
-            """
-            return HTMLResponse(content=loading_html)
+            # Direct redirect to proxy URL (no loading page for CSS/JS resources)
+            return RedirectResponse(url=f"/proxy/{decoded_url}")
             
         except Exception as e:
             print(f"❌ DECODE ERROR: {e}")
@@ -1112,12 +1040,44 @@ async def proxy_page(path: str, request: Request):
                     # Simple URL rewriting for CSS/JS resources (NOT Base64 encoding)
                     proxy_base = f"https://{request.headers.get('host', 'scrap.ybsq.xyz')}/proxy"
                     
-                    # Replace relative URLs with proxy URLs
-                    processed_content = re.sub(
-                        r'(href|src|action)=(["\'])(?!https?://|data:|javascript:|mailto:)([^"\']+)\2',
-                        lambda m: f'{m.group(1)}={m.group(2)}{proxy_base}/{urljoin(path, m.group(3))}{m.group(2)}',
-                        html_content
-                    )
+                    # CroxyProxy-style URL rewriting - ALL URLs through proxy
+                    def rewrite_all_urls(content, base_url):
+                        # Rewrite ALL URLs (absolute and relative) to go through proxy
+                        import base64
+                        
+                        def url_replacer(match):
+                            attr = match.group(1)
+                            quote = match.group(2) 
+                            url = match.group(3)
+                            
+                            # Skip data URLs, javascript, mailto
+                            if url.startswith(('data:', 'javascript:', 'mailto:', '#')):
+                                return match.group(0)
+                            
+                            # Convert to absolute URL
+                            if url.startswith('//'):
+                                full_url = f"https:{url}"
+                            elif url.startswith('/'):
+                                parsed_base = urlparse(base_url)
+                                full_url = f"{parsed_base.scheme}://{parsed_base.netloc}{url}"
+                            elif url.startswith('http'):
+                                full_url = url
+                            else:
+                                full_url = urljoin(base_url, url)
+                            
+                            # Force ALL resources through direct proxy (not Base64)
+                            return f'{attr}={quote}{proxy_base}/{full_url}{quote}'
+                        
+                        # Replace href, src, action attributes
+                        content = re.sub(
+                            r'(href|src|action)=(["\'])([^"\']+)\2',
+                            url_replacer,
+                            content
+                        )
+                        
+                        return content
+                    
+                    processed_content = rewrite_all_urls(html_content, path)
                     
                     return HTMLResponse(
                         content=processed_content,
