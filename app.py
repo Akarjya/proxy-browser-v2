@@ -1208,7 +1208,81 @@ async def proxy_page(path: str, request: Request):
                             }});
                         }}
                         
+                        // 6. CRITICAL: ADSENSE BROWSER FINGERPRINT SPOOFING
+                        // Override timezone detection (AdSense's hidden method)
+                        Object.defineProperty(Intl.DateTimeFormat.prototype, 'resolvedOptions', {{
+                            value: function() {{
+                                return {{
+                                    locale: 'en-US',
+                                    timeZone: 'America/New_York',
+                                    hour12: true,
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                }};
+                            }}
+                        }});
+                        
+                        // Override Date timezone methods completely
+                        Date.prototype.getTimezoneOffset = function() {{
+                            return 300; // EST = UTC-5 = +300 minutes
+                        }};
+                        
+                        Date.prototype.toString = function() {{
+                            return this.toISOString().replace('T', ' ').replace('Z', ' EST');
+                        }};
+                        
+                        // Override navigator language properties
+                        Object.defineProperty(navigator, 'language', {{
+                            get: () => 'en-US',
+                            configurable: false
+                        }});
+                        
+                        Object.defineProperty(navigator, 'languages', {{
+                            get: () => ['en-US', 'en'],
+                            configurable: false
+                        }});
+                        
+                        // Override screen properties for US-style display
+                        Object.defineProperty(screen, 'colorDepth', {{
+                            get: () => 24
+                        }});
+                        
+                        // Force US currency formatting
+                        if (window.Intl && window.Intl.NumberFormat) {{
+                            const originalNumberFormat = Intl.NumberFormat;
+                            Intl.NumberFormat = function(locales, options) {{
+                                return new originalNumberFormat('en-US', {{
+                                    ...options,
+                                    currency: 'USD',
+                                    currencyDisplay: 'symbol'
+                                }});
+                            }};
+                        }}
+                        
+                        // 7. ADSENSE SPECIFIC OVERRIDES
+                        // Force AdSense to think we're in US
+                        window.google_ad_client = window.google_ad_client || 'ca-pub-3610144340749413';
+                        window.google_ad_region = 'US';
+                        window.google_ad_country = 'US';
+                        window.google_gl = 'us';
+                        window.google_cr = 'countryUS';
+                        window.google_ad_format = 'auto';
+                        
+                        // Override any AdSense geolocation detection
+                        if (window.googletag) {{
+                            const originalCmd = window.googletag.cmd;
+                            window.googletag.cmd = window.googletag.cmd || [];
+                            window.googletag.cmd.push(function() {{
+                                window.googletag.pubads().setTargeting('country', 'US');
+                                window.googletag.pubads().setTargeting('region', 'NY');
+                                window.googletag.pubads().setTargeting('city', 'NewYork');
+                            }});
+                        }}
+                        
                         console.log('🇺🇸 CROXYPROXY: ALL IP DETECTION BLOCKED!');
+                        console.log('🎯 ADSENSE: Browser fingerprint spoofed to US');
                     }})();
                     </script>
                     '''
